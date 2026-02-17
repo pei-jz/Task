@@ -1,0 +1,1345 @@
+/* ... (Keep Root & Basic Styles) ... */
+:root {
+  /* Light Mode */
+  --bg-color: #f8fafc;
+  --card-bg: #ffffff;
+  --text-primary: #0f172a;
+  --text-secondary: #64748b;
+  --accent-color: #0ea5e9;
+  --accent-hover: #0284c7;
+  --phase-color: #6366f1;
+  --phase-selected-color: #4f46e5;
+  --task-bar-color: #22c55e;
+  --parent-task-bar-color: #059669;
+  --danger-color: #ef4444;
+  --border-color: #e2e8f0;
+  --timeline-grid-color: #f1f5f9;
+  --header-bg: #f8fafc;
+  --radius: 8px;
+  --header-height: 50px;
+  --track-height: 48px;
+  --wbs-row-height: 24px;
+  --wbs-grid-color: #e2e8f0;
+  --dependency-line-color: #cbd5e1;
+  --active-phase-row-bg: rgba(14, 165, 233, 0.05);
+}
+
+[data-theme="dark"] {
+  --bg-color: #0f172a;
+  --card-bg: #1e293b;
+  --text-primary: #f1f5f9;
+  /* Brighter white */
+  --text-secondary: #94a3b8;
+  /* Lighter gray */
+  /* Brighter for dark mode */
+  --accent-color: #38bdf8;
+  /* Darker Indigo for better contrast against white text */
+  --phase-color: #a78bfa;
+  /* Vibrant Violet for distinct Dark Mode look */
+  --phase-selected-color: #8b5cf6;
+  --task-bar-color: #4ade80;
+  --parent-task-bar-color: #34d399;
+  --border-color: rgba(255, 255, 255, 0.15);
+  /* More visible */
+  --timeline-grid-color: rgba(255, 255, 255, 0.08);
+  --wbs-grid-color: rgba(255, 255, 255, 0.08);
+  --dependency-line-color: #64748b;
+  --active-phase-row-bg: rgba(56, 189, 248, 0.1);
+  /* More visible */
+  --header-bg: #1e293b;
+  /* Match card-bg */
+  --track-bg: #1e293b;
+}
+
+/* --- Layout & Global --- */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Meiryo', sans-serif;
+  background-color: var(--bg-color);
+  /* Changed from --bg-primary */
+  color: var(--text-primary);
+  overflow: hidden;
+  /* App-like feel */
+  display: flex;
+  /* Ensure body takes full height */
+  height: 100vh;
+}
+
+#app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100%;
+  padding-left: 0;
+  /* REMOVED PADDING */
+  box-sizing: border-box;
+}
+
+/* --- Compact Header --- */
+.project-header {
+  display: flex;
+  flex-direction: row;
+  /* 3. Compact Header */
+  align-items: center;
+  justify-content: flex-start;
+  gap: 1.5rem;
+  padding: 0.5rem 1rem;
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.project-header h2 {
+  font-size: 1.2rem;
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.project-meta {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.header-toggle-btn {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  color: var(--text-secondary);
+  padding: 0 0.5rem;
+  transition: transform 0.2s;
+}
+
+.header-toggle-btn.collapsed {
+  transform: rotate(-90deg);
+}
+
+/* --- Tab Navigation --- */
+.tab-bar {
+  display: flex;
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border-color);
+  padding: 0 1rem;
+  justify-content: space-between;
+  align-items: center;
+  height: 50px;
+}
+
+.tab-btn {
+  background: none;
+  border: none;
+  padding: 0.8rem 1rem;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.tab-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-color);
+}
+
+.tab-btn.active {
+  color: var(--accent-color);
+  border-bottom: 2px solid var(--accent-color);
+  font-weight: 600;
+}
+
+.tab-content h3 {
+  color: var(--accent-color);
+  font-weight: 700;
+}
+
+/* --- Top Layout: Dashboard + Timeline --- */
+.top-section {
+  display: flex;
+  /* Height controlled by inline style or flex */
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+  overflow: hidden;
+  background: var(--bg-color);
+}
+
+.dashboard-panel {
+  width: 250px;
+  /* Fixed width for dashboard */
+  min-width: 250px;
+  border-right: 1px solid var(--border-color);
+  background: var(--bg-color);
+  padding: 1rem;
+  overflow-y: auto;
+}
+
+.dashboard-panel.collapsed .dash-title,
+.dashboard-panel.collapsed .dash-stats,
+.dashboard-panel.collapsed .dash-workload-title,
+.dashboard-panel.collapsed .dash-workload-list {
+  display: none !important;
+}
+
+.dashboard-panel.collapsed {
+  display: flex !important;
+  flex-direction: column;
+  justify-content: flex-start;
+  padding-top: 1.5rem;
+  overflow: hidden;
+}
+
+.dashboard-panel.collapsed .dash-progress {
+  margin-bottom: 0 !important;
+}
+
+/* Tooltips for Milestones */
+.milestone-marker {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: var(--accent-color);
+  transform: rotate(45deg);
+  border: 2px solid white;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  z-index: 5;
+}
+
+.milestone-tooltip {
+  position: absolute;
+  bottom: 120%;
+  /* Above the marker */
+  left: 50%;
+  transform: translateX(-50%) rotate(-45deg);
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+  z-index: 100;
+  display: block;
+  /* ensure it exists */
+}
+
+.milestone-marker:hover .milestone-tooltip {
+  opacity: 1;
+}
+
+.timeline-wrapper {
+  flex: 1;
+  height: 100%;
+  border-bottom: none;
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+  /* Allow tooltips and phases to overflow */
+  position: relative;
+  transition: height 0.3s ease;
+}
+
+
+
+/* Reduced Heights */
+.timeline-header-layer {
+  height: 40px;
+}
+
+/* Was taller */
+.timeline-track-row {
+  display: flex;
+  position: relative;
+  height: 32px;
+  /* 4. Reduced Height */
+  border-bottom: 1px solid var(--border-color);
+  /* Changed from --border-color-dim */
+  align-items: center;
+  background: var(--track-bg, transparent);
+}
+
+.milestone-track {
+  height: 32px;
+  background: rgba(248, 250, 252, 0.5);
+}
+
+/* Reverted to original background, removed --primary-color-rgb */
+
+/* --- WBS --- */
+.wbs-wrapper {
+  flex: 1;
+  /* Takes remaining space */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg-color);
+  /* Changed from --bg-primary */
+}
+
+.wbs-toolbar {
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--card-bg);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.wbs-split-view {
+  display: grid;
+  /* Columns will be set dynamically, default here */
+  /* Increased from 550px to 1000px per user request */
+  grid-template-columns: 1000px 4px 1fr;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Resizer */
+.wbs-resizer {
+  background: var(--border-color);
+  cursor: col-resize;
+  transition: background 0.2s;
+  z-index: 10;
+}
+
+.wbs-resizer:hover,
+.wbs-resizer.active {
+  background: var(--primary-color);
+}
+
+.wbs-table {
+  width: 100%;
+  border-collapse: collapse;
+  /* Critical for 24px height */
+  border-spacing: 0;
+  table-layout: fixed;
+  /* Optional but good for performance */
+}
+
+.wbs-table-container {
+  overflow-y: auto;
+  /* Enable Scroll */
+  overflow-x: auto;
+  border-right: 1px solid var(--border-color);
+  background: var(--card-bg);
+}
+
+.wbs-table th {
+  padding: 0 !important;
+  font-size: 0.75rem;
+  height: 24px !important;
+  line-height: 23px !important;
+  max-height: 24px;
+  overflow: hidden;
+  box-sizing: border-box;
+  vertical-align: middle;
+}
+
+/* Reduce Input Sizes */
+.wbs-table input {
+  padding: 0 4px;
+  font-size: 0.75rem;
+  /* approx 10-12px depending on base */
+  height: 100%;
+  border: none;
+  background: transparent;
+  width: 100%;
+  max-width: 100%;
+  margin: 0 !important;
+  /* Prevent expansion */
+  line-height: 23px;
+  /* Fix 25px issue */
+  color: inherit;
+  /* Fix for Dark Mode black text */
+}
+
+.wbs-table input:focus {
+  outline: 1px solid var(--primary-color);
+  background: var(--bg-color);
+}
+
+.wbs-table button {
+  padding: 0 4px;
+}
+
+/* Alerts */
+.task-warning {
+  background-color: #fef9c3;
+}
+
+/* Yellow */
+.task-danger {
+  background-color: #fee2e2;
+}
+
+/* Red */
+.task-warning input {
+  background-color: #fef9c3;
+}
+
+.task-danger input {
+  background-color: #fee2e2;
+}
+
+[data-theme="dark"] .task-warning {
+  background-color: rgba(253, 224, 71, 0.15);
+  color: #fef08a;
+}
+
+[data-theme="dark"] .task-warning input {
+  background-color: transparent;
+  color: #fef08a;
+}
+
+[data-theme="dark"] .task-danger {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+}
+
+[data-theme="dark"] .task-danger input {
+  background-color: transparent;
+  color: #fca5a5;
+}
+
+/* Status Colors - Light Mode */
+.status-todo {
+  background-color: #f3f4f6;
+  color: #374151;
+}
+
+.status-doing {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+.status-done {
+  background-color: #dcfce7;
+  color: #166534;
+}
+
+/* Status Colors - Dark Mode */
+[data-theme="dark"] .status-todo {
+  background-color: rgba(148, 163, 184, 0.15);
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .status-doing {
+  background-color: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
+}
+
+[data-theme="dark"] .status-done {
+  background-color: rgba(34, 197, 94, 0.15);
+  color: #86efac;
+}
+
+/* Excel-like Selection */
+.selected-cell {
+  outline: 2px solid var(--primary-color);
+  background-color: rgba(59, 130, 246, 0.2);
+  /* Increased opacity for visibility */
+  z-index: 10;
+  position: relative;
+  /* Ensure outline sits on top */
+}
+
+.selected-range {
+  background-color: rgba(59, 130, 246, 0.15);
+  /* Light Blue tint */
+  position: relative;
+}
+
+.selected-range::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  pointer-events: none;
+}
+
+.wbs-table td.editing {
+  outline: 2px solid var(--primary-color);
+  background: white;
+  z-index: 20;
+}
+
+/* Disable interaction with inputs unless editing */
+.wbs-table td:not(.editing) input,
+.wbs-table td:not(.editing) button {
+  pointer-events: none;
+}
+
+/* Allow interaction with toggle buttons specifically if needed, or maybe not? 
+   toggle buttons are mostly for folding. Excel allows folding.
+   Let's exclude .task-toggle-btn/subtask-btn for now if they are inside td?
+   My HTML structure puts them in indentation wrapper in first col.
+   Let's check HTML.
+*/
+
+/* WBS Gantt */
+.wbs-gantt-container {
+  overflow-x: auto;
+  overflow-y: auto;
+  position: relative;
+  background: var(--card-bg);
+}
+
+.today-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  border-left: 2px dashed red;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.gantt-weekend-col {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.05);
+  /* Darken weekends */
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* Ensure content can force scroll */
+.wbs-gantt-canvas {
+  min-height: 100%;
+  min-width: 100%;
+  position: relative;
+  /* background: var(--bg-color); optional */
+}
+
+/* Day of Week Span */
+.date-dow {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  margin-left: 4px;
+}
+
+/* Start Screen */
+.start-screen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--bg-color);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.start-card {
+  background: var(--card-bg);
+  padding: 3rem;
+  border-radius: 16px;
+  border: 1px solid var(--border-color);
+  text-align: center;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+}
+
+.start-card h1 {
+  color: var(--accent-color);
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+}
+
+.start-btn-group {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+/* Layout */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.top-bar {
+  padding: 0.8rem 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border-color);
+  z-index: 20;
+}
+
+.toolbar-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Timeline Grid (Full Width, No Sidebar) */
+/* We remove the grid layout for top timeline to make it simple full width */
+.timeline-header-container {
+  height: var(--header-height);
+  background: var(--header-bg);
+  border-bottom: 1px solid var(--border-color);
+  overflow: hidden;
+  position: relative;
+  z-index: 20;
+  flex-shrink: 0;
+}
+
+.timeline-content-container {
+  flex: 1;
+  overflow: auto;
+  position: relative;
+  background: var(--card-bg);
+}
+
+.timeline-canvas-full {
+  position: relative;
+  min-width: 100%;
+  height: 100%;
+}
+
+/* Header Items */
+.timeline-header-group {
+  position: absolute;
+  top: 0;
+  height: 50%;
+  border-right: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: var(--header-bg);
+}
+
+.timeline-header-cell {
+  position: absolute;
+  bottom: 0;
+  height: 50%;
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.timeline-header-cell:hover {
+  background: var(--accent-color);
+  color: white;
+}
+
+.timeline-header-cell.holiday {
+  color: var(--danger-color);
+}
+
+.timeline-header-cell.sunday {
+  color: var(--danger-color);
+}
+
+.timeline-header-cell.saturday {
+  color: #3b82f6;
+}
+
+[data-theme="dark"] .timeline-header-cell.saturday {
+  color: #60a5fa;
+}
+
+.timeline-header-cell.weekday {
+  color: var(--text-secondary);
+}
+
+/* Track Items */
+.timeline-track-row.active-phase-row {
+  background-color: rgba(14, 165, 233, 0.03);
+}
+
+.grid-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  /* background: var(--timeline-grid-color); Remove solid background */
+  border-right: 1px dotted var(--timeline-grid-color);
+  /* Use dotted border */
+}
+
+.grid-col-holiday {
+  background-color: rgba(239, 68, 68, 0.05);
+  /* Light Red */
+}
+
+.grid-col-sun {
+  background-color: rgba(239, 68, 68, 0.05);
+  /* Light Red */
+}
+
+.grid-col-sat {
+  background-color: rgba(59, 130, 246, 0.05);
+  /* Light Blue */
+}
+
+[data-theme="dark"] .grid-col-holiday {
+  background-color: rgba(239, 68, 68, 0.1);
+}
+
+[data-theme="dark"] .grid-col-sun {
+  background-color: rgba(239, 68, 68, 0.1);
+}
+
+[data-theme="dark"] .grid-col-sat {
+  background-color: rgba(59, 130, 246, 0.1);
+}
+
+.today-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--accent-color);
+  opacity: 0.5;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.phase-bar {
+  position: absolute;
+  top: 10px;
+  height: 28px;
+  background: var(--phase-color);
+  border-radius: 4px;
+  color: white;
+  font-weight: 600;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  padding: 0 0.5rem;
+  overflow: visible;
+  /* Ensure label is visible even if bar is tiny */
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  text-shadow: 0 0 3px rgba(0, 0, 0, 0.9);
+  /* Improve readability on overflow with strong shadow */
+}
+
+.phase-bar:hover {
+  z-index: 20;
+  transform: scaleY(1.05);
+}
+
+.phase-bar.selected {
+  border: 2px solid white;
+  box-shadow: 0 0 0 2px var(--phase-selected-color);
+}
+
+/* Milestone Row Specifics */
+.milestone-marker {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  background: var(--accent-color);
+  transform: rotate(45deg);
+  border: 2px solid var(--card-bg);
+  cursor: pointer;
+  z-index: 10;
+}
+
+.milestone-marker-header {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: var(--accent-color);
+  transform: rotate(45deg);
+  border: 2px solid var(--card-bg);
+  z-index: 60;
+  cursor: pointer;
+}
+
+.milestone-label {
+  position: absolute;
+  font-size: 0.75rem;
+  color: var(--text-primary);
+  font-weight: 600;
+  top: 14px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 11;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
+}
+
+/* WBS Section */
+.wbs-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 600px;
+}
+
+.wbs-table th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-color);
+  z-index: 10;
+  padding: 0 0.5rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+  white-space: nowrap;
+  height: 50px !important;
+  /* Force Match Gantt Header */
+  line-height: 50px !important;
+  padding: 0 8px !important;
+  /* Keep horizontal padding */
+  box-sizing: border-box;
+  overflow: hidden;
+  vertical-align: middle;
+}
+
+.wbs-table td {
+  padding: 0 !important;
+  border-bottom: 1px solid var(--border-color);
+  /* Add Border Back */
+  font-size: 0.75rem;
+  height: 24px !important;
+  /* Strict Sync */
+  line-height: 23px !important;
+  max-height: 24px;
+  overflow: hidden;
+  box-sizing: border-box;
+  vertical-align: middle;
+}
+
+.wbs-table input:focus {
+  background: var(--bg-color);
+  outline: 1px solid var(--accent-color);
+}
+
+/* Hierarchy & Indentation */
+.task-indent-wrapper {
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+
+.task-toggle-btn {
+  cursor: pointer;
+  width: 16px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  margin-right: 4px;
+}
+
+.subtask-btn {
+  background: transparent;
+  color: var(--accent-color);
+  font-size: 1rem;
+  font-weight: bold;
+  padding: 0 4px;
+  margin-left: 4px;
+  opacity: 0.1;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.wbs-table tr:hover .subtask-btn {
+  opacity: 1;
+}
+
+.task-row-parent input {
+  font-weight: 600;
+}
+
+/* Gantt In WBS */
+.wbs-gantt-container {
+  flex: 1;
+  overflow: auto;
+  background: var(--card-bg);
+  position: relative;
+  background-image: linear-gradient(to bottom, transparent 39px, var(--timeline-grid-color) 40px);
+  background-size: 100% 40px;
+  background-position-y: 33px;
+}
+
+.gantt-bar {
+  position: absolute;
+  background: var(--task-bar-color);
+  border-radius: 3px;
+  opacity: 0.8;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  padding-left: 4px;
+  color: white;
+  font-size: 0.7rem;
+  overflow: hidden;
+}
+
+.gantt-bar.parent-task {
+  background: var(--parent-task-bar-color);
+  border-radius: 4px;
+  height: 16px !important;
+  margin-top: 2px;
+}
+
+/* Modals & Utils - Keep Existing */
+.hidden {
+  display: none !important;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-card {
+  background: var(--card-bg);
+  padding: 1.5rem;
+  width: 500px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+}
+
+.modal-input {
+  width: 100%;
+  padding: 0.6rem;
+  margin-bottom: 0.8rem;
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-family: 'Meiryo', sans-serif;
+}
+
+/* Flat Select for Assignee */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-color: transparent !important;
+  border: none !important;
+  padding: 0 2px;
+  /* Tighter padding */
+  font-size: 0.75rem;
+  /* Match input size */
+  color: inherit;
+  width: 100%;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: center;
+}
+
+select:focus {
+  outline: none;
+  background-color: #f1f5f9 !important;
+}
+
+/* Highlight Animation for Auto-Schedule */
+.highlight-change {
+  background-color: rgba(255, 235, 59, 0.4) !important;
+  /* Yellow-ish */
+  transition: background-color 0.5s ease;
+}
+
+.modal-row {
+  display: flex;
+  gap: 1rem;
+}
+
+.modal-title {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  font-weight: 500;
+  border-radius: 6px;
+}
+
+.primary-btn {
+  background: var(--accent-color);
+  color: white;
+  padding: 0.5rem 1rem;
+}
+
+.secondary-btn {
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 0.5rem 1rem;
+  background: transparent;
+}
+
+.icon-btn {
+  background: transparent;
+  padding: 0.5rem;
+  font-size: 1.1rem;
+}
+
+.danger-btn {
+  color: var(--danger-color);
+  background: transparent;
+  font-size: 1.2rem;
+}
+
+/* Weekend & Holiday Colors */
+.grid-col-sat {
+  background-color: rgba(59, 130, 246, 0.05);
+  /* Light Blue */
+}
+
+.grid-col-sun {
+  background-color: rgba(239, 68, 68, 0.05);
+  /* Light Red */
+}
+
+.grid-col-holiday {
+  background-color: rgba(239, 68, 68, 0.1) !important;
+  /* Red for Holidays, strong */
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-color);
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+/* Timeline Selection Overlay */
+.timeline-selection-overlay {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  background-color: rgba(59, 130, 246, 0.2);
+  /* Blue transparent */
+  border: 1px solid rgba(59, 130, 246, 0.5);
+  pointer-events: none;
+  z-index: 10;
+}
+
+.modal-content {
+  background-color: var(--bg-color);
+  /* Fix transparency */
+  color: var(--text-primary);
+  padding: 1rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* Dashboard Styles */
+.dashboard-container {
+  height: 100%;
+  background: var(--bg-color);
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.dash-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.dash-card h3 {
+  font-size: 1.1rem;
+  margin-bottom: 1rem;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.5rem;
+}
+
+.stat-item {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.stat-value {
+  font-weight: bold;
+  color: var(--text-primary);
+}
+
+.progress-bar-bg {
+  height: 8px;
+  background: var(--border-color);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 0.5rem;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: var(--accent-color);
+  width: 0%;
+  transition: width 0.5s ease;
+}
+
+.assignee-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+/* Body Full Width */
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', sans-serif;
+  background-color: var(--bg-color);
+  color: var(--text-primary);
+  overflow: hidden;
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  /* Strict Full Width */
+}
+
+#app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100%;
+  max-width: none;
+  /* Ensure no limit */
+  padding-left: 20px;
+  box-sizing: border-box;
+}
+
+/* ... (Existing) ... */
+
+/* Strict Row Heights */
+.wbs-table th,
+.wbs-table td {
+  padding: 0 4px;
+  /* Tighter padding */
+  font-size: 0.85rem;
+  white-space: nowrap;
+  height: 28px;
+  /* Strict 28px */
+  line-height: 28px;
+  /* Vertical Center */
+  box-sizing: border-box;
+}
+
+.gantt-bar {
+  /* ... existing ... */
+  height: 16px;
+  /* Matches calculations */
+}
+
+/* Sticky Header in Gantt */
+.gantt-sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  /* Above grid */
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border-color);
+  box-sizing: border-box;
+}
+
+/* Filter Popup */
+.filter-icon {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  margin-left: 6px;
+  padding: 0px 4px;
+  border-radius: 4px;
+}
+
+.filter-icon:hover {
+  background: var(--border-color);
+  color: var(--text-primary);
+}
+
+.filter-popup {
+  position: fixed;
+  /* Fixed to window */
+  z-index: 1000;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border-radius: 6px;
+  min-width: 200px;
+  max-height: 300px;
+  display: flex;
+  flex-direction: column;
+}
+
+.filter-list {
+  overflow-y: auto;
+  flex: 1;
+  padding: 4px 0;
+}
+
+.filter-item {
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: var(--text-primary);
+}
+
+.filter-item:hover {
+  background: var(--bg-color);
+}
+
+.filter-search-input {
+  width: 100%;
+  padding: 6px;
+  border: none;
+  font-size: 0.85rem;
+  outline: none;
+}
+
+/* --- Settings UI Tweaks --- */
+.settings-menu-item {
+  margin-bottom: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  border-left: 3px solid transparent;
+  /* Prepare for active state */
+}
+
+.settings-menu-item:hover {
+  background: var(--bg-color);
+}
+
+.settings-menu-item.active {
+  background: rgba(14, 165, 233, 0.1);
+  /* Light accent bg */
+  color: var(--accent-color);
+  font-weight: 600;
+  border-left: 3px solid var(--accent-color);
+}
+
+/* Settings Content Titles */
+#settings-content h2,
+#settings-content h3 {
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.5rem;
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  color: var(--accent-color);
+}
+
+/* Dashboard Grid View */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+  padding: 1.5rem;
+  overflow-y: auto;
+  background: var(--bg-color);
+  height: 100%;
+}
+
+.dash-card {
+  background: var(--card-bg);
+  padding: 1.5rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+}
+
+.dash-card h3 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  font-size: 1.1rem;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.5rem;
+  margin-top: 0;
+}
+
+.stat-item {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.stat-value {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.assignee-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.assignee-table th {
+  text-align: left;
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-secondary);
+}
+
+.assignee-table td {
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--border-color);
+}

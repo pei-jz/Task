@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Project Manager</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script type="module" src="main.js" defer></script>
+</head>
+
+<body>
+  <!-- Start Screen Overlay -->
+  <div id="start-screen" class="start-screen">
+    <div class="start-card">
+      <h1>Welcome to Project Manager</h1>
+      <p style="color:var(--text-secondary); margin-top:0.5rem; margin-bottom: 2rem;">Manage your projects with detailed
+        timelines and WBS.</p>
+
+      <div class="start-btn-group">
+        <button id="start-new-btn" class="primary-btn">Create New Project</button>
+        <button id="start-open-btn" class="secondary-btn">Open Existing Project</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main App Container -->
+  <div id="app-container" class="app-container">
+    <!-- Tab Navigation & Global Controls -->
+    <nav class="tab-bar" style="justify-content: space-between; align-items: center;">
+      <div class="tabs-left" style="display:flex; gap:1rem;">
+        <button class="tab-btn active" data-target="tab-dashboard">Dashboard</button>
+        <button class="tab-btn" data-target="tab-schedule">Schedule</button>
+        <button class="tab-btn" data-target="tab-aggregation">Aggregation</button>
+        <button class="tab-btn" data-target="tab-settings">Settings</button>
+      </div>
+
+      <div class="global-controls" style="display:flex; gap:0.5rem; align-items:center;">
+        <!-- Project Title Removed -->
+        <!-- Import, Save, Load Removed -->
+        <button id="theme-toggle-btn" class="icon-btn" title="Toggle Theme">Of</button>
+      </div>
+    </nav>
+
+    <!-- Main Content Area with Tabs -->
+    <main class="main-content">
+
+      <!-- Tab 1: Dashboard -->
+      <div id="tab-dashboard" class="tab-content"
+        style="display:block; height:100%; display:flex; flex-direction:column;">
+        <!-- Top: Stats -->
+        <div class="top-section" style="height: 40%; min-height: 250px;">
+          <div id="mini-dashboard" class="dashboard-panel"
+            style="width:100%; border-right:none; display:flex; flex-direction:row; gap:2rem; overflow-x:auto;">
+            <!-- Dashboard Content (injected by JS) -->
+          </div>
+        </div>
+        <!-- Bottom: Read-only Timeline -->
+        <div class="timeline-wrapper" style="flex:1; display:flex; flex-direction:column;">
+          <div
+            style="padding: 0.5rem 1rem; border-bottom:1px solid var(--border-color); background:var(--bg-color); display:flex; gap:0.5rem;">
+            <button class="primary-btn" onclick="window.WBS_ACTION.addPhaseInfo()"
+              style="font-size:0.8rem; padding:0.3rem 0.8rem;">+ Phase</button>
+            <button class="secondary-btn" onclick="window.WBS_ACTION.addMilestoneInfo()"
+              style="font-size:0.8rem; padding:0.3rem 0.8rem;">+ Milestone</button>
+          </div>
+          <div id="dashboard-view" class="timeline-container" style="flex:1;">
+            <!-- Timeline Grid injected here -->
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Tab 2: Schedule (WBS) -->
+      <div id="tab-schedule" class="tab-content" style="display:none; height:100%;">
+        <div class="wbs-wrapper" style="height:100%;">
+          <div id="wbs-container" class="wbs-container" style="display:flex; flex-direction:column; height:100%;">
+            <!-- WBS Toolbar -->
+            <div class="wbs-toolbar">
+              <!-- Replaced All Phases Label with Controls -->
+              <div style="display:flex; gap:0.5rem;">
+                <button id="add-phase-btn" class="primary-btn" style="font-size:0.8rem; padding:0.4rem 0.8rem;">+
+                  Phase</button>
+                <button id="add-milestone-btn" class="secondary-btn" style="font-size:0.8rem; padding:0.4rem 0.8rem;">+
+                  Milestone</button>
+                <button id="import-btn" class="secondary-btn" style="font-size:0.8rem; padding:0.4rem 0.8rem;"
+                  title="Import WBS">📥 Import</button>
+              </div>
+              <!-- Controls injected here -->
+            </div>
+
+            <!-- Split View -->
+            <div class="wbs-split-view">
+              <!-- Left: Table -->
+              <div class="wbs-table-container">
+                <div id="wbs-table-view"></div>
+              </div>
+              <!-- Resizer -->
+              <div id="wbs-resizer" class="wbs-resizer"></div>
+              <!-- Right: Gantt -->
+              <div class="wbs-gantt-container">
+                <div id="wbs-gantt-view"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 3: Aggregation -->
+      <div id="tab-aggregation" class="tab-content" style="display:none; height:100%; padding:1rem; overflow:auto;">
+        <h3 style="margin-top:0;">Project Aggregation</h3>
+        <div id="aggregation-view" style="display:grid; grid-template-columns: 1fr; gap:1rem;">
+          <!-- Graphs injected here -->
+          <p>Loading aggregation data...</p>
+        </div>
+      </div>
+
+      <!-- Tab 4: Settings -->
+      <div id="tab-settings" class="tab-content" style="display:none; height:100%; overflow:hidden;">
+        <div style="display:flex; height:100%;">
+          <!-- Sidebar -->
+          <div class="settings-sidebar"
+            style="width:200px; border-right:1px solid var(--border-color); background:var(--bg-color); padding:1rem;">
+            <ul style="list-style:none; padding:0; margin:0;">
+              <li class="settings-menu-item active" data-page="assignees">Assignees</li>
+              <li class="settings-menu-item" data-page="holidays">Holidays</li>
+            </ul>
+          </div>
+          <!-- Content -->
+          <div id="settings-content" style="flex:1; padding:2rem; overflow-y:auto; background:var(--card-bg);">
+            <!-- Settings Forms injected here -->
+            <p>Select a setting...</p>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Modals -->
+  <div id="modal-overlay" class="modal-overlay hidden">
+    <div id="modal-content" class="modal-card">
+      <h3 id="modal-title">Title</h3>
+      <div id="modal-body"></div>
+      <div class="modal-actions" style="display:flex; justify-content:flex-end; gap:1rem; margin-top:2rem;">
+        <button id="modal-cancel-btn" class="text-btn">Cancel</button>
+        <button id="modal-confirm-btn" class="primary-btn">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+</body>
+
+</html>

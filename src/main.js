@@ -1,0 +1,174 @@
+
+import {
+    project, loadData, saveData, resetData, undo, redo,
+    zoomGantt, setRenderCallback, toggleTheme, initTheme,
+    selectedPhaseIds, setSelectedPhaseIds
+} from './modules/state.js';
+import {
+    renderTimeline, getDateRange
+} from './modules/gantt.js';
+import {
+    renderWBS, updateTask, updateTaskDate, toggleTask, togglePhase, deleteTaskWin,
+    openAddTaskModal, selectCell, enterEditMode, moveSelection,
+    openFilterMenu, closeFilterPopup,
+    addMilestoneInfo, addPhaseInfo, openImportModal, importWBSFromText,
+    openAssigneeSettings, closeAssigneeSettings, addAssignee, deleteAssignee,
+    openHolidayManager, removeHoliday, setupWBSEvents
+} from './modules/wbs.js';
+import {
+    renderDashboard, toggleDashboardView, renderMiniDashboard
+} from './modules/dashboard.js';
+import { setupGlobalEvents } from './modules/events.js';
+import { setupTabs } from './modules/tabs.js';
+import { showModal } from './modules/ui.js';
+
+// --- Global Exports (for inline HTML handlers) ---
+window.updateTask = updateTask;
+window.updateTaskDate = updateTaskDate;
+window.toggleTask = toggleTask;
+window.togglePhase = togglePhase;
+window.deleteTaskWin = deleteTaskWin;
+window.openAddTaskModal = openAddTaskModal;
+window.selectCell = selectCell;
+window.openFilterMenu = openFilterMenu;
+window.closeFilterPopup = closeFilterPopup;
+window.addMilestoneInfo = addMilestoneInfo;
+window.addPhaseInfo = addPhaseInfo;
+window.openImportModal = openImportModal;
+window.openAssigneeSettings = openAssigneeSettings;
+window.closeAssigneeSettings = closeAssigneeSettings;
+window.addAssignee = addAssignee;
+window.deleteAssignee = deleteAssignee;
+window.openHolidayManager = openHolidayManager;
+window.removeHoliday = removeHoliday;
+window.addAssignee = addAssignee;
+window.deleteAssignee = deleteAssignee;
+window.toggleDashboardView = toggleDashboardView;
+// window.enterEditMode = enterEditMode; // Maybe needed if double click handler in HTML uses it? YES.
+window.enterEditMode = enterEditMode;
+window.zoomGantt = zoomGantt;
+window.undo = undo;
+window.redo = redo;
+window.saveData = saveData;
+window.loadData = loadData; // Exposed for buttons? Yes.
+window.resetData = resetData;
+window.toggleTheme = toggleTheme;
+
+// --- Initialization ---
+
+setRenderCallback(() => {
+    renderWBS();
+    renderTimeline();
+    renderMiniDashboard();
+
+    const dashTab = document.getElementById('tab-dashboard');
+    if (dashTab && dashTab.style.display !== 'none') {
+        renderDashboard();
+    }
+});
+
+window.addEventListener('DOMContentLoaded', async () => {
+    setupTabs();
+    setupGlobalEvents();
+    setupWBSEvents();
+
+    // Welcome Screen Buttons
+    const startScreen = document.getElementById('start-screen');
+    const hideStartScreen = () => {
+        if (startScreen) startScreen.style.display = 'none';
+        renderWBS();
+        renderTimeline();
+    };
+
+    document.getElementById('start-new-btn')?.addEventListener('click', () => {
+        // Simple prompt for now, or use showModal if we want consistent UI.
+        // Given "押したさに、プロジェクト名の入力がなくなってます", user expects an input.
+        // Let's use a modal or simple prompt. Since we have showModal in ui.js, let's use it for better UX?
+        // Or just prompt() for speed to restore functionality precisely as requested (user implies it WAS there).
+        // A simple prompt is safest to match "restore" expectation unless we know it was a modal.
+        // Let's use `showModal` to be consistent with other "Add" UIs we built.
+
+        showModal('Create New Project', `
+            <label>Project Name</label>
+            <input id="new-project-name" class="modal-input" value="New Project">
+            <label>Start Date</label>
+            <input id="new-project-start" type="date" class="modal-input" value="${new Date().toISOString().split('T')[0]}">
+            <label>End Date</label>
+            <input id="new-project-end" type="date" class="modal-input" value="${new Date().toISOString().split('T')[0]}">
+        `, () => {
+            const name = document.getElementById('new-project-name').value;
+            const start = document.getElementById('new-project-start').value;
+            const end = document.getElementById('new-project-end').value;
+            if (name && start && end) {
+                resetData(name, start, end);
+                hideStartScreen();
+            }
+        });
+    });
+
+    document.getElementById('start-open-btn')?.addEventListener('click', async () => {
+        const res = await loadData();
+        if (res) hideStartScreen();
+    });
+
+    // Bind Toolbar Buttons
+    document.getElementById('add-phase-btn')?.addEventListener('click', addPhaseInfo);
+    document.getElementById('add-milestone-btn')?.addEventListener('click', addMilestoneInfo);
+    document.getElementById('manage-assignees-btn')?.addEventListener('click', openAssigneeSettings);
+    document.getElementById('manage-holidays-btn')?.addEventListener('click', openHolidayManager);
+    document.getElementById('import-btn')?.addEventListener('click', openImportModal);
+    document.getElementById('theme-toggle-btn')?.addEventListener('click', toggleTheme);
+
+    // Initial Render - Check if project exists to hide start screen?
+    // Actually, we want to SHOW start screen by default if no project loaded.
+    // await loadData(); // Don't auto-load default data, let user choose.
+
+    // Theme Init
+    initTheme();
+
+    // --- Shortcuts & Auto-Save ---
+    document.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+            e.preventDefault();
+            window.saveData(false); // false = manual save (might trigger dialog if no path, or save to path)
+        }
+    });
+
+    let autoSaveTimer;
+    window.triggerAutoSave = () => {
+        clearTimeout(autoSaveTimer);
+        const indicator = document.getElementById('save-indicator') || createSaveIndicator();
+        indicator.textContent = 'Editing...';
+        indicator.style.opacity = '1';
+
+        autoSaveTimer = setTimeout(() => {
+            indicator.textContent = 'Saving...';
+            window.saveData(true).then(() => { // true = silent/auto
+                indicator.textContent = 'Saved';
+                setTimeout(() => { indicator.style.opacity = '0'; }, 2000);
+            }).catch(err => {
+                console.warn('Auto-save skipped/failed', err);
+                indicator.style.opacity = '0';
+            });
+        }, 2000); // 2 seconds debounce
+    };
+
+    function createSaveIndicator() {
+        const div = document.createElement('div');
+        div.id = 'save-indicator';
+        div.style.position = 'fixed';
+        div.style.bottom = '20px';
+        div.style.left = '20px';
+        div.style.background = 'var(--card-bg)';
+        div.style.color = 'var(--text-secondary)';
+        div.style.padding = '5px 10px';
+        div.style.borderRadius = '4px';
+        div.style.fontSize = '0.8rem';
+        div.style.boxShadow = '0 2px 5px rgba(0,0,0,0.1)';
+        div.style.opacity = '0';
+        div.style.transition = 'opacity 0.3s';
+        div.style.zIndex = '1000';
+        document.body.appendChild(div);
+        return div;
+    }
+});
