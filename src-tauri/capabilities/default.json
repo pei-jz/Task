@@ -13,6 +13,8 @@
     "dialog:allow-ask",
     "dialog:allow-save",
     "dialog:allow-open",
-    "fs:default"
+    "fs:default",
+    "core:event:default",
+    "process:allow-exit"
   ]
 }

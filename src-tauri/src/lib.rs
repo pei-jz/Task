@@ -39,17 +39,38 @@ async fn pick_open_path(app: tauri::AppHandle) -> Result<Option<String>, String>
     }
 }
 
+#[tauri::command]
+fn get_initial_file(state: tauri::State<'_, InitialFile>) -> Option<String> {
+    state.0.lock().unwrap().clone()
+}
+
+struct InitialFile(std::sync::Mutex<Option<String>>);
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let initial_file = std::env::args()
+        .nth(1)
+        .filter(|arg| arg.ends_with(".wbs"));
+
     tauri::Builder::default()
+        .manage(InitialFile(std::sync::Mutex::new(initial_file.clone())))
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_process::init())
+        .setup(move |app| {
+            if let Some(path) = initial_file {
+                use tauri::Emitter;
+                let _ = app.emit("startup-file", path);
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             save_file,
             read_file,
             pick_save_path,
-            pick_open_path
+            pick_open_path,
+            get_initial_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

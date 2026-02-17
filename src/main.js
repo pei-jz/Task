@@ -1,6 +1,6 @@
 
 import {
-    project, loadData, saveData, resetData, undo, redo,
+    project, loadData, loadFile, saveData, resetData, undo, redo,
     zoomGantt, setRenderCallback, toggleTheme, initTheme,
     selectedPhaseIds, setSelectedPhaseIds
 } from './modules/state.js';
@@ -123,8 +123,54 @@ window.addEventListener('DOMContentLoaded', async () => {
     // Actually, we want to SHOW start screen by default if no project loaded.
     // await loadData(); // Don't auto-load default data, let user choose.
 
-    // Theme Init
+    // --- Initialization ---
     initTheme();
+
+    // --- Startup File Association ---
+    const listenForStartupFile = async () => {
+        try {
+            const { listen } = await import('@tauri-apps/api/event');
+            const { getCurrentWindow } = await import('@tauri-apps/api/window');
+
+            // Listen for files passed at startup (emitted from Rust setup)
+            await listen('startup-file', async (event) => {
+                const path = event.payload;
+                if (path) {
+                    try {
+                        await loadFile(path);
+                        hideStartScreen();
+                    } catch (err) {
+                        // If format is wrong, user wants to "terminate" (but in UI we just show error and stay at start)
+                        // Actually let's follow user request: "エラーを表示し終了する"
+                        // Since we can't easily kill the process from JS without a command, 
+                        // we'll show the message and then exit if possible.
+                        const { exit } = await import('@tauri-apps/plugin-process');
+                        await exit(1);
+                    }
+                }
+            });
+
+            // Handle the case where the app is already running and a file is opened (Single Instance behavior)
+            // But for now, we focus on launch association. 
+            // In Tauri v2, we might need a command to check if there are initial args 
+            // if the event was emitted before JS listener was ready.
+            const { invoke } = await import('@tauri-apps/api/core');
+            const initialPath = await invoke('get_initial_file');
+            if (initialPath) {
+                try {
+                    await loadFile(initialPath);
+                    hideStartScreen();
+                } catch (err) {
+                    const { exit } = await import('@tauri-apps/plugin-process');
+                    await exit(1);
+                }
+            }
+        } catch (e) {
+            console.error('Failed to setup file listener', e);
+        }
+    };
+
+    listenForStartupFile();
 
     // --- Shortcuts & Auto-Save ---
     document.addEventListener('keydown', (e) => {

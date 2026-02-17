@@ -144,34 +144,47 @@ export async function loadData() {
         });
 
         if (path) {
-            // Use Rust backend to read binary
-            const content = await invoke('read_file', { path: path }); // Returns number[] (Vec<u8>)
-            const zip = await JSZip.loadAsync(new Uint8Array(content));
-
-            if (zip.file("project.json")) {
-                const text = await zip.file("project.json").async("text");
-                project = JSON.parse(text);
-
-                if (!project.holidays) project.holidays = [];
-                if (!project.assignees) project.assignees = [];
-                syncAssigneeColors();
-
-                if (project.phases) {
-                    selectedPhaseIds = project.phases.map(ph => ph.id);
-                }
-
-                currentFilePath = path;
-                triggerRender();
-                return project;
-            } else {
-                throw new Error("Invalid .wbs file: missing project.json");
-            }
+            return await loadFile(path);
         }
     } catch (err) {
         console.error('Load failed:', err);
         await message(`Load failed: ${err}`, { title: 'Error', kind: 'error' });
     }
     return null;
+}
+
+export async function loadFile(path) {
+    try {
+        // Use Rust backend to read binary
+        const content = await invoke('read_file', { path: path }); // Returns number[] (Vec<u8>)
+        const zip = await JSZip.loadAsync(new Uint8Array(content));
+
+        if (zip.file("project.json")) {
+            const text = await zip.file("project.json").async("text");
+            project = JSON.parse(text);
+
+            if (!project.holidays) project.holidays = [];
+            if (!project.assignees) project.assignees = [];
+            syncAssigneeColors();
+
+            if (project.phases) {
+                selectedPhaseIds = project.phases.map(ph => ph.id);
+            }
+
+            currentFilePath = path;
+            triggerRender();
+            return project;
+        } else {
+            throw new Error("Invalid .wbs file: missing project.json or incompatible format.");
+        }
+    } catch (err) {
+        console.error('File load failed:', err);
+        await message(`Open failed. The file may be corrupted or in an unexpected format.\n\nError: ${err.message || err}`, { title: 'Format Error', kind: 'error' });
+        // The user requested to exit if format is wrong, but in a desktop app, 
+        // showing the error and remaining on the welcome screen is safer than forced exit.
+        // However, if called during startup, we'll handle the "exit" or "show error" in main.js.
+        throw err;
+    }
 }
 
 export function syncAssigneeColors() {
