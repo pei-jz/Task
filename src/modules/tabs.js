@@ -56,10 +56,14 @@ export function setupTabs() {
     });
 
     // Restore or Default
+    // Force Default to Dashboard (User Request)
+    switchTab('tab-dashboard');
+    /* 
     const saved = localStorage.getItem('active_tab');
     if (saved && document.getElementById(saved)) {
         switchTab(saved);
     } else {
         switchTab('tab-dashboard'); // Default
     }
+    */
 }

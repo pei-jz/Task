@@ -8,7 +8,7 @@ import {
     renderTimeline, getDateRange
 } from './modules/gantt.js';
 import {
-    renderWBS, updateTask, updateTaskDate, toggleTask, togglePhase, deleteTaskWin,
+    renderWBS, updateTask, updateTaskDate, toggleTask, togglePhase, initiateTaskDeletion,
     openAddTaskModal, selectCell, enterEditMode, moveSelection,
     openFilterMenu, closeFilterPopup,
     addMilestoneInfo, addPhaseInfo, openImportModal, importWBSFromText,
@@ -27,7 +27,7 @@ window.updateTask = updateTask;
 window.updateTaskDate = updateTaskDate;
 window.toggleTask = toggleTask;
 window.togglePhase = togglePhase;
-window.deleteTaskWin = deleteTaskWin;
+window.deleteTaskWin = initiateTaskDeletion; // Keep old name for compatibility if needed, but map to new logic
 window.openAddTaskModal = openAddTaskModal;
 window.selectCell = selectCell;
 window.openFilterMenu = openFilterMenu;

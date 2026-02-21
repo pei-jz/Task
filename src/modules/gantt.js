@@ -387,15 +387,21 @@ export function getDateRange() {
         maxDate = normalizeDate(project.end);
         project.phases.forEach(p => {
             const s = normalizeDate(p.start), e = normalizeDate(p.end);
-            if (s < minDate) minDate = s;
-            if (e > maxDate) maxDate = e;
+            if (s && (!minDate || s < minDate)) minDate = s;
+            if (e && (!maxDate || e > maxDate)) maxDate = e;
         });
-        if (minDate) minDate.setDate(minDate.getDate() - 2);
-        if (maxDate) maxDate.setDate(maxDate.getDate() + 5);
     }
-    if (!minDate) return { totalTime: 0 };
-    minDate.setHours(0, 0, 0, 0); maxDate.setHours(0, 0, 0, 0);
-    return { minDate, maxDate, totalTime: maxDate - minDate };
+
+    // Safety check: if no valid dates found (e.g. empty project or invalid dates)
+    if (!minDate || isNaN(minDate.getTime())) minDate = new Date();
+    if (!maxDate || isNaN(maxDate.getTime())) maxDate = new Date(minDate);
+
+    // Padding
+    const safeMin = new Date(minDate); safeMin.setDate(safeMin.getDate() - 2);
+    const safeMax = new Date(maxDate); safeMax.setDate(safeMax.getDate() + 5);
+
+    safeMin.setHours(0, 0, 0, 0); safeMax.setHours(0, 0, 0, 0);
+    return { minDate: safeMin, maxDate: safeMax, totalTime: safeMax - safeMin };
 }
 
 export function zoomTo(d, unit) {

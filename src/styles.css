@@ -445,41 +445,72 @@ body {
 
 /* Excel-like Selection */
 .selected-cell {
-  outline: 2px solid var(--primary-color);
-  background-color: rgba(59, 130, 246, 0.2);
-  /* Increased opacity for visibility */
+  outline: 2px solid var(--accent-color);
+  outline-offset: -2px;
+  /* Ensure outline stays inside cell bounds */
+  background-color: transparent;
+  /* Let range background handle this */
   z-index: 10;
   position: relative;
-  /* Ensure outline sits on top */
 }
 
 .selected-range {
-  background-color: rgba(59, 130, 246, 0.15);
-  /* Light Blue tint */
-  position: relative;
+  background-color: #e8f0fe !important;
+  /* Solid light blue to override column colors */
+  color: #000 !important;
+  /* Ensure text is readable */
 }
 
-.selected-range::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  border: 1px solid rgba(59, 130, 246, 0.3);
-  pointer-events: none;
+[data-theme="dark"] .selected-range {
+  background-color: rgba(59, 130, 246, 0.3) !important;
+  color: #fff !important;
 }
+
+/* Remove double borders by removing the ::after pseudo-element */
 
 .wbs-table td.editing {
   outline: 2px solid var(--primary-color);
-  background: white;
+  background: var(--bg-color);
   z-index: 20;
 }
 
-/* Disable interaction with inputs unless editing */
+/* Disable interaction and native styling for inputs unless editing */
 .wbs-table td:not(.editing) input,
-.wbs-table td:not(.editing) button {
+.wbs-table td:not(.editing) button,
+.wbs-table td:not(.editing) select {
   pointer-events: none;
+  appearance: none;
+  -moz-appearance: none;
+  -webkit-appearance: none;
+  background: transparent !important;
+  color: inherit !important;
+  border: none !important;
+}
+
+.wbs-table td:not(.editing) .wbs-date-cell {
+  pointer-events: none;
+  background: transparent;
+  color: inherit;
+  border: none;
+}
+
+.wbs-table td.editing select,
+.wbs-table td.editing input {
+  background-color: var(--bg-color) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Hide number input spinners globally for WBS table if they appear */
+.wbs-table input[type="number"]::-webkit-inner-spin-button,
+.wbs-table input[type="number"]::-webkit-outer-spin-button {
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.wbs-table input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
 }
 
 /* Allow interaction with toggle buttons specifically if needed, or maybe not? 
@@ -1342,4 +1373,25 @@ body {
 .assignee-table td {
   padding: 0.5rem;
   border-bottom: 1px solid var(--border-color);
+}
+
+@keyframes flashUpdate {
+  0% {
+    background-color: #ffeb3b;
+    color: #000;
+  }
+
+  50% {
+    background-color: rgba(255, 235, 59, 0.5);
+    color: var(--text-primary);
+  }
+
+  100% {
+    background-color: transparent;
+  }
+}
+
+.flash-update {
+  animation: flashUpdate 3s cubic-bezier(0, 0.9, 0.5, 1) !important;
+  border-radius: 4px;
 }

@@ -9,8 +9,16 @@ export function generateId() {
 
 export function normalizeDate(dStr) {
     if (!dStr) return null;
-    const parts = dStr.split('-');
-    return new Date(parts[0], parts[1] - 1, parts[2]);
+    let clean = String(dStr).split('(')[0].trim();
+    clean = clean.replace(/\./g, '-');
+    const parts = clean.split('-');
+    if (parts.length >= 3) {
+        return new Date(parts[0], parts[1] - 1, parts[2]);
+    }
+    const d = new Date(clean);
+    if (isNaN(d.getTime())) return null;
+    d.setHours(0, 0, 0, 0);
+    return d;
 }
 
 export function escapeVal(v) {
