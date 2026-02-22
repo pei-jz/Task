@@ -12,6 +12,14 @@ async fn read_file(path: String) -> Result<Vec<u8>, String> {
 }
 
 #[tauri::command]
+async fn get_modified_time(path: String) -> Result<u64, String> {
+    let metadata = fs::metadata(path).map_err(|e| e.to_string())?;
+    let modified = metadata.modified().map_err(|e| e.to_string())?;
+    let duration = modified.duration_since(std::time::UNIX_EPOCH).map_err(|e| e.to_string())?;
+    Ok(duration.as_millis() as u64)
+}
+
+#[tauri::command]
 async fn pick_save_path(app: tauri::AppHandle) -> Result<Option<String>, String> {
     let result = app
         .dialog()
@@ -68,6 +76,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             save_file,
             read_file,
+            get_modified_time,
             pick_save_path,
             pick_open_path,
             get_initial_file

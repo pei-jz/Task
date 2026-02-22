@@ -311,6 +311,13 @@ export function renderWBS() {
                 if (eDate < today) tr.className = 'task-danger';
                 else if (eDate.getTime() === today.getTime() || eDate.getTime() === today.getTime() + 86400000) tr.className = 'task-warning';
             }
+            if (t._conflictHighlight) {
+                tr.style.outline = '2px solid #ef4444';
+                tr.style.outlineOffset = '-2px';
+                tr.style.zIndex = '5';
+                tr.style.position = 'relative';
+                tr.title = 'Updated from another session';
+            }
 
             // Cell Generation Helpers
             const effectivePid = t.isPhase ? t.id : currentPhaseId;
@@ -497,6 +504,7 @@ export function updateTask(pid, tid, field, value) {
     if (p && p.id === tid) {
         if (field === 'title' || field === 'name') {
             p.name = value;
+            p.updatedAt = Date.now();
             triggerRender();
         }
         return;
@@ -558,6 +566,7 @@ export function updateTask(pid, tid, field, value) {
         }
     }
 
+    t.updatedAt = Date.now();
     recalculatePhase(p);
     triggerRender();
 }

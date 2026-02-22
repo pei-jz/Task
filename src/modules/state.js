@@ -6,6 +6,30 @@ import { getDefaultJapaneseHolidays } from './holidays.js';
 
 export let project = null;
 export let currentFilePath = null; // Track current file path
+export let lastLoadedTime = 0; // Track the server/OS modified time when loaded to detect external changes
+
+export async function updateWindowTitle(path) {
+    const defaultTitle = "J.H Project Manager";
+    let title = defaultTitle;
+
+    if (path) {
+        // Extract filename from path
+        const filename = path.split('\\').pop().split('/').pop();
+        title = `${filename} - ${defaultTitle}`;
+    }
+
+    // Update HTML title
+    document.title = title;
+
+    // Update Tauri Window title
+    try {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        await getCurrentWindow().setTitle(title);
+    } catch (err) {
+        console.warn("Could not set window title natively:", err);
+    }
+}
+
 export function setProject(p) { project = p; }
 
 export let theme = 'light';
@@ -32,6 +56,7 @@ export function resetData(name, start, end) {
     project = createNewProject(name || 'New Project', start || d, end || d);
     project.phases = [];
     currentFilePath = null; // Reset path on new
+    lastLoadedTime = Date.now(); // Local initial time
     saveState();
     triggerRender();
 }
@@ -120,6 +145,34 @@ export async function saveData(silent = false) {
         }
 
         if (path) {
+            // Check for external modifications before saving
+            if (path === currentFilePath) {
+                try {
+                    const currentDiskTime = await invoke('get_modified_time', { path: path });
+
+                    if (currentDiskTime > lastLoadedTime) {
+                        // File changed externally. Try to smart-merge.
+                        const conflictState = await resolveConflictsSmartly(path);
+
+                        // conflictState: 
+                        // 'merged_clean' -> we pulled in safe remote changes, proceed to save.
+                        // 'resolved_keep_local' -> user pushed through a hard conflict (or chose to overwrite).
+                        // 'resolved_reload' -> user chose to discard changes. We reload and should NOT save.
+                        // 'abort' -> user cancelled the save entirely.
+
+                        if (conflictState === 'abort' || conflictState === 'resolved_reload') {
+                            return; // Do not save
+                        }
+
+                        // If it merged cleanly (or user forced overwrite), we proceed to save the merged state.
+                        // If silent auto-save was happening, a clean merge doesn't need to pop up a big modal, 
+                        // but maybe we just log it or show a toast.
+                    }
+                } catch (e) {
+                    console.warn('Could not check modified time', e);
+                }
+            }
+
             const zip = new JSZip();
             zip.file("project.json", JSON.stringify(project, null, 2));
             const content = await zip.generateAsync({ type: "uint8array" });
@@ -128,6 +181,13 @@ export async function saveData(silent = false) {
             await invoke('save_file', { path: path, content: Array.from(content) });
 
             currentFilePath = path;
+            await updateWindowTitle(path);
+
+            try {
+                lastLoadedTime = await invoke('get_modified_time', { path: path }); // Update tracking time
+            } catch (e) {
+                lastLoadedTime = Date.now();
+            }
 
             if (!silent) await message('Project saved successfully.', { title: 'Success', kind: 'info' });
         }
@@ -172,6 +232,13 @@ export async function loadFile(path) {
             }
 
             currentFilePath = path;
+            await updateWindowTitle(path);
+
+            try {
+                lastLoadedTime = await invoke('get_modified_time', { path: path });
+            } catch (e) {
+                lastLoadedTime = Date.now();
+            }
             triggerRender();
             return project;
         } else {
@@ -199,7 +266,7 @@ export function syncAssigneeColors() {
     });
 }
 
-export function createNewProject(name, start, end) {
+export async function createNewProject(name, start, end) {
     project = {
         id: generateId(),
         name,
@@ -211,6 +278,8 @@ export function createNewProject(name, start, end) {
         assignees: []
     };
     selectedPhaseIds = [];
+    currentFilePath = null;
+    await updateWindowTitle(null);
     undoStack.length = 0; redoStack.length = 0;
     return project;
 }
@@ -242,5 +311,245 @@ export function addDefaultPhasesToProject(names, sStr, eStr) {
             date: fmt(pEnd)
         });
         curr = pEnd;
+    });
+}
+
+export async function resolveConflictsSmartly(path) {
+    try {
+        const content = await invoke('read_file', { path: path });
+        const zip = await JSZip.loadAsync(new Uint8Array(content));
+
+        let remoteProject = null;
+        if (zip.file("project.json")) {
+            const text = await zip.file("project.json").async("text");
+            remoteProject = JSON.parse(text);
+        }
+
+        if (!remoteProject) throw new Error("Could not parse remote format.");
+
+        // Build Lookup map for remote
+        const remoteMap = new Map();
+        if (remoteProject.phases) {
+            remoteProject.phases.forEach(p => {
+                remoteMap.set(p.id, p);
+                const traverse = (list) => {
+                    list.forEach(t => { remoteMap.set(t.id, t); if (t.subtasks) traverse(t.subtasks); });
+                };
+                if (p.tasks) traverse(p.tasks);
+            });
+        }
+
+        // Traverse Local and check against Remote
+        // To also capture purely NEW remote tasks, we should actually iterate Remote,
+        // and selectively merge into Local. Or, an easier mental model:
+        // Start with a clone of Remote. 
+        // For every item in Remote, if it exists in Local, check `updatedAt`.
+        // If Local has it and Local is `isLocallyModified = updatedAt > lastLoadedTime`, overwrite the Remote one with the Local one.
+        // Finally, for every item in Local that is NOT in Remote at all (meaning it was purely created locally), add it to the cloned Remote.
+        // Then set project = clonedRemote.
+
+        let hasSilentlyMerged = false;
+        let hardConflicts = [];
+
+        // Build Local lookup
+        const localMap = new Map();
+        project.phases.forEach(p => {
+            localMap.set(p.id, p);
+            const traverse = (list) => {
+                list.forEach(t => { localMap.set(t.id, t); if (t.subtasks) traverse(t.subtasks); });
+            };
+            if (p.tasks) traverse(p.tasks);
+        });
+
+        const mergedPhases = [];
+
+        // Parse through remote
+        remoteProject.phases.forEach(rPhase => {
+            const lPhase = localMap.get(rPhase.id);
+            const isLocalModified = lPhase && lPhase.updatedAt && lPhase.updatedAt > lastLoadedTime;
+
+            let finalPhase = null;
+
+            if (lPhase) {
+                if (rPhase.updatedAt > lPhase.updatedAt && !isLocalModified) {
+                    // Safe update from remote
+                    finalPhase = Object.assign({}, lPhase, rPhase); // Preserve local references but overwrite data
+                    finalPhase._conflictHighlight = true;
+                    hasSilentlyMerged = true;
+                } else if (rPhase.updatedAt > lPhase.updatedAt && isLocalModified) {
+                    // Collision
+                    hardConflicts.push({ local: lPhase, remote: rPhase });
+                    finalPhase = lPhase; // Fallback to local
+                } else {
+                    // Local is newer or same
+                    finalPhase = lPhase;
+                }
+            } else {
+                // Completely new remote phase
+                finalPhase = rPhase;
+                finalPhase._conflictHighlight = true;
+                hasSilentlyMerged = true;
+            }
+
+            // Now handle tasks for finalPhase
+            const finalTasks = [];
+            const rTasks = rPhase.tasks || [];
+
+            rTasks.forEach(rTask => {
+                const lTask = localMap.get(rTask.id);
+                const isTaskLocalMod = lTask && lTask.updatedAt && lTask.updatedAt > lastLoadedTime;
+
+                let finalTask = null;
+                if (lTask) {
+                    if (rTask.updatedAt > lTask.updatedAt && !isTaskLocalMod) {
+                        finalTask = Object.assign({}, lTask, rTask);
+                        finalTask._conflictHighlight = true;
+                        hasSilentlyMerged = true;
+                    } else if (rTask.updatedAt > lTask.updatedAt && isTaskLocalMod) {
+                        hardConflicts.push({ local: lTask, remote: rTask });
+                        finalTask = lTask;
+                    } else {
+                        finalTask = lTask;
+                    }
+                } else {
+                    finalTask = rTask;
+                    finalTask._conflictHighlight = true;
+                    hasSilentlyMerged = true;
+                }
+                finalTasks.push(finalTask);
+            });
+
+            // Re-append purely local tasks that aren't in remote (user added them concurrently)
+            if (lPhase && lPhase.tasks) {
+                lPhase.tasks.forEach(lt => {
+                    if (!rTasks.find(rt => rt.id === lt.id)) {
+                        finalTasks.push(lt);
+                    }
+                });
+            }
+
+            finalPhase.tasks = finalTasks;
+            mergedPhases.push(finalPhase);
+        });
+
+        // Add pure local phases
+        project.phases.forEach(lp => {
+            if (!remoteProject.phases.find(rp => rp.id === lp.id)) {
+                mergedPhases.push(lp);
+            }
+        });
+
+        // Apply back to project
+        if (hardConflicts.length === 0) {
+            project.phases = mergedPhases;
+        }
+
+        if (hardConflicts.length > 0) {
+            // Need user input
+            return await showConflictModal(path, hardConflicts);
+        } else {
+            // No hard conflicts. All remote changes (if any) applied cleanly.
+            if (hasSilentlyMerged) {
+                triggerRender();
+                showToast("他ユーザーの変更情報を結合しました", 4000);
+                setTimeout(() => {
+                    // Clear green/red highlights
+                    project.phases.forEach(p => {
+                        delete p._conflictHighlight;
+                        const traverse = (list) => {
+                            list.forEach(t => { delete t._conflictHighlight; if (t.subtasks) traverse(t.subtasks); });
+                        };
+                        if (p.tasks) traverse(p.tasks);
+                    });
+                    triggerRender();
+                }, 5000);
+            }
+            return 'merged_clean';
+        }
+
+    } catch (err) {
+        console.error("Conflict checking error:", err);
+        const force = await confirm("Could not verify remote state. Force save anyway?");
+        return force ? 'merged_clean' : 'abort';
+    }
+}
+
+// Simple toast notification
+function showToast(msg, duration = 3000) {
+    const el = document.createElement('div');
+    el.textContent = msg;
+    el.style.position = 'fixed';
+    el.style.bottom = '20px';
+    el.style.right = '20px';
+    el.style.backgroundColor = '#10b981'; // green
+    el.style.color = '#fff';
+    el.style.padding = '10px 20px';
+    el.style.borderRadius = '5px';
+    el.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
+    el.style.zIndex = '999999';
+    el.style.transition = 'opacity 0.3s ease';
+    document.body.appendChild(el);
+    setTimeout(() => { el.style.opacity = '0'; }, duration - 300);
+    setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, duration);
+}
+
+// Modal specifically for hard conflicts
+function showConflictModal(path, conflicts) {
+    return new Promise((resolve) => {
+        const modal = document.createElement('div');
+        modal.style.position = 'fixed';
+        modal.style.top = '0'; modal.style.left = '0'; modal.style.width = '100vw'; modal.style.height = '100vh';
+        modal.style.backgroundColor = 'rgba(0,0,0,0.5)';
+        modal.style.display = 'flex'; modal.style.alignItems = 'center'; modal.style.justifyContent = 'center';
+        modal.style.zIndex = '99999';
+
+        const box = document.createElement('div');
+        box.style.backgroundColor = 'var(--card-bg, #fff)';
+        box.style.color = 'var(--text-primary, #111827)';
+        box.style.padding = '20px';
+        box.style.borderRadius = '8px';
+        box.style.maxWidth = '600px';
+        box.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1)';
+
+        box.innerHTML = `
+            <h3 style="margin-top:0; color:#ef4444;">⚠️ 重大な競合を検知しました</h3>
+            <p>あなたと他のユーザーが<strong>全く同じタスク (${conflicts.length}件)</strong> を同時に編集しました。</p>
+            <ul style="font-size:0.9em; color:var(--text-secondary); margin-bottom: 20px;">
+                <li><strong>最新を読込（自分の変更を破棄）:</strong> 他のユーザーの編集を優先します。競合したタスクに加えた自分の編集は失われます。</li>
+                <li><strong>強制更新（自分の変更で上書き）:</strong> 自分の編集を優先します。他のユーザーが競合タスクに加えた編集は失われます。</li>
+            </ul>
+            <p style="font-size:0.85em; color:#666;">※あなたが編集していない別のタスクに対する他ユーザーの変更は、どちらを選んでも安全に自動結合されます。</p>
+            <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
+                <button id="btn-merge-reload" style="padding:8px 16px; background:#3b82f6; color:white; border:none; border-radius:4px; cursor:pointer;">最新を読込（自分の変更を破棄）</button>
+                <button id="btn-merge-overwrite" style="padding:8px 16px; background:#ef4444; color:white; border:none; border-radius:4px; cursor:pointer;">強制更新（自分の変更で上書き）</button>
+                <button id="btn-cancel" style="padding:8px 16px; background:transparent; color:var(--text-primary); border:1px solid #ccc; border-radius:4px; cursor:pointer;">キャンセル</button>
+            </div>
+        `;
+
+        modal.appendChild(box);
+        document.body.appendChild(modal);
+
+        box.querySelector('#btn-merge-reload').onclick = async () => {
+            document.body.removeChild(modal);
+            // Re-apply the remote state to the hard conflicts
+            conflicts.forEach(c => {
+                Object.assign(c.local, c.remote);
+                c.local._conflictHighlight = true;
+            });
+            triggerRender();
+            // We want to save the new merged result to update timestamps
+            resolve('merged_clean');
+        };
+
+        box.querySelector('#btn-merge-overwrite').onclick = () => {
+            document.body.removeChild(modal);
+            // Proceed to save, which natively uses the local state (our edits win)
+            resolve('resolved_keep_local');
+        };
+
+        box.querySelector('#btn-cancel').onclick = () => {
+            document.body.removeChild(modal);
+            resolve('abort');
+        };
     });
 }
