@@ -174,7 +174,7 @@ export async function saveData(silent = false) {
             }
 
             const zip = new JSZip();
-            zip.file("project.json", JSON.stringify(project, null, 2));
+            zip.file("project.json", JSON.stringify(project, (k, v) => k.startsWith('_') ? undefined : v, 2));
             const content = await zip.generateAsync({ type: "uint8array" });
 
             // Use Rust backend to save binary (native fs) to avoid scope issues
@@ -229,6 +229,17 @@ export async function loadFile(path) {
 
             if (project.phases) {
                 selectedPhaseIds = project.phases.map(ph => ph.id);
+                // Clean up any leaked ephemeral UI flags from old saves
+                project.phases.forEach(p => {
+                    Object.keys(p).forEach(k => { if (k.startsWith('_')) delete p[k]; });
+                    const traverse = (list) => {
+                        list.forEach(t => {
+                            Object.keys(t).forEach(k => { if (k.startsWith('_')) delete t[k]; });
+                            if (t.subtasks) traverse(t.subtasks);
+                        });
+                    };
+                    if (p.tasks) traverse(p.tasks);
+                });
             }
 
             currentFilePath = path;
@@ -385,10 +396,17 @@ export async function resolveConflictsSmartly(path) {
                     finalPhase = lPhase;
                 }
             } else {
-                // Completely new remote phase
                 finalPhase = rPhase;
                 finalPhase._conflictHighlight = true;
                 hasSilentlyMerged = true;
+            }
+
+            if (finalPhase) {
+                Object.keys(finalPhase).forEach(k => {
+                    if (k.startsWith('_') && k !== '_conflictHighlight') {
+                        delete finalPhase[k];
+                    }
+                });
             }
 
             // Now handle tasks for finalPhase
@@ -403,10 +421,20 @@ export async function resolveConflictsSmartly(path) {
                 if (lTask) {
                     if (rTask.updatedAt > lTask.updatedAt && !isTaskLocalMod) {
                         finalTask = Object.assign({}, lTask, rTask);
-                        finalTask._conflictHighlight = true;
-                        hasSilentlyMerged = true;
+                        // Only highlight if actual data changed, ignore pure timestamp updates
+                        const lClean = { ...lTask }; delete lClean.updatedAt; delete lClean._conflictHighlight;
+                        const rClean = { ...rTask }; delete rClean.updatedAt; delete rClean._conflictHighlight;
+                        if (JSON.stringify(lClean) !== JSON.stringify(rClean)) {
+                            finalTask._conflictHighlight = true;
+                            hasSilentlyMerged = true;
+                        }
                     } else if (rTask.updatedAt > lTask.updatedAt && isTaskLocalMod) {
-                        hardConflicts.push({ local: lTask, remote: rTask });
+                        // Collision - wait, are the contents identical?
+                        const lClean = { ...lTask }; delete lClean.updatedAt; delete lClean._conflictHighlight;
+                        const rClean = { ...rTask }; delete rClean.updatedAt; delete rClean._conflictHighlight;
+                        if (JSON.stringify(lClean) !== JSON.stringify(rClean)) {
+                            hardConflicts.push({ local: lTask, remote: rTask });
+                        }
                         finalTask = lTask;
                     } else {
                         finalTask = lTask;
@@ -415,6 +443,14 @@ export async function resolveConflictsSmartly(path) {
                     finalTask = rTask;
                     finalTask._conflictHighlight = true;
                     hasSilentlyMerged = true;
+                }
+
+                if (finalTask) {
+                    Object.keys(finalTask).forEach(k => {
+                        if (k.startsWith('_') && k !== '_conflictHighlight') {
+                            delete finalTask[k];
+                        }
+                    });
                 }
                 finalTasks.push(finalTask);
             });
@@ -462,7 +498,7 @@ export async function resolveConflictsSmartly(path) {
                         if (p.tasks) traverse(p.tasks);
                     });
                     triggerRender();
-                }, 5000);
+                }, 8000); // Wait 8 seconds instead of 5
             }
             return 'merged_clean';
         }

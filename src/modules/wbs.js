@@ -30,6 +30,82 @@ export let selectionAnchor = null;
 export let isEditing = false;
 const MAX_COLS = 10;
 
+// --- AUTO-SCHEDULING LOGIC ---
+function shiftAssigneeTasks(changedTask, oldEndStr) {
+    if (!changedTask || !changedTask.assignee) return;
+
+    // Build list of all *other* tasks for this assignee
+    let otherTasks = [];
+    const collectTasks = (list) => {
+        list.forEach(t => {
+            if (!t.isPhase && t.assignee) {
+                const assigneeName = (typeof t.assignee === 'object' && t.assignee.name) ? t.assignee.name : t.assignee;
+                const targetName = (typeof changedTask.assignee === 'object' && changedTask.assignee.name) ? changedTask.assignee.name : changedTask.assignee;
+                if (assigneeName === targetName && t.id !== changedTask.id && t.start && t.end) {
+                    otherTasks.push(t);
+                }
+            }
+            if (t.subtasks) collectTasks(t.subtasks);
+        });
+    };
+    project.phases.forEach(p => {
+        if (p.tasks) collectTasks(p.tasks);
+    });
+
+    // Sort to determine natural chronological sequence of the REST of the tasks
+    otherTasks.sort((a, b) => new Date(a.start) - new Date(b.start));
+
+    // We only want to shift tasks that were *originally* scheduled AFTER this task's old end date.
+    // If we don't know the exact old order, we can assume any task that currently starts >= oldEndStr is "downstream".
+    // Wait, the user moved the end date FORWARD. oldEndStr is the previous end date.
+    // So any task that started >= oldEndStr is a candidate for being pushed by the new end date.
+    const oldEnd = new Date(oldEndStr);
+    const newEnd = new Date(changedTask.end);
+
+    // If the date didn't push forward, we don't necessarily need to pull tasks back automatically, so return.
+    if (newEnd <= oldEnd) return;
+
+    let currentEnd = newEnd;
+
+    otherTasks.forEach(t => {
+        let tStart = new Date(t.start);
+
+        // Is this task considered "downstream"?
+        // It's downstream if its original start date is >= the changed task's OLD end date. 
+        // We use oldEnd - 1 day to be safe with business days alignment.
+        // Actually, if it started after or exactly on the old end date, it's downstream.
+
+        // ユーザーが手動で並び替えた「より過去」のタスクを誤射しないよう、
+        // 変更【前】の終了日以降に開始する予定だったタスクだけを対象にする
+        if (tStart >= oldEnd) {
+            if (tStart < currentEnd) {
+                // Overlap detected! Push it.
+                // Find the next business day after currentEnd
+                let newStart = getNextBusinessDay(currentEnd, project.holidays);
+
+                // Calculate new end based on duration
+                const duration = getBusinessDuration(t.start, t.end, project.holidays) || 1;
+                const estDays = (t.estimate && t.estimate > 0) ? Math.ceil(t.estimate / 8) : duration;
+                let pushedEnd = addBusinessDays(newStart, estDays, project.holidays);
+
+                const fmt = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                t.start = fmt(newStart);
+                t.end = fmt(pushedEnd);
+
+                // Mark for visual highlight
+                t._flashAuto = true;
+                setTimeout(() => { if (t) delete t._flashAuto; const el = document.getElementById(`date-cell-${t.id}-start`); if (el) el.classList.remove('flash-update'); }, 4000);
+
+                currentEnd = pushedEnd; // Cascade
+            } else {
+                // It's downstream, but there's no overlap gap. Update the cascade end.
+                currentEnd = new Date(t.end);
+            }
+        }
+    });
+}
+
+
 // --- WBS RENDERER ---
 export function renderWBS() {
     if (!project) return;
@@ -536,7 +612,12 @@ export function updateTask(pid, tid, field, value) {
     } else {
         t[field] = value;
 
+        let oldEndStr = t.end; // Capture BEFORE updating logic runs
+        let oldStartStr = t.start;
+
         // Auto-schedule based on Estimate (if estimate > 0)
+        let didDateChange = false;
+
         if (t.estimate && t.estimate > 0) {
             if (field === 'start' && value) {
                 // Start changed -> Calc End
@@ -544,6 +625,7 @@ export function updateTask(pid, tid, field, value) {
                 if (newEnd && newEnd !== t.end) {
                     t.end = newEnd;
                     t._flashEnd = true;
+                    didDateChange = true;
                     setTimeout(() => { if (t) delete t._flashEnd; const el = document.getElementById(`date-cell-${t.id}-end`); if (el) el.classList.remove('flash-update'); }, 3000);
                 }
             } else if (field === 'end' && value) {
@@ -552,6 +634,7 @@ export function updateTask(pid, tid, field, value) {
                 if (newStart && newStart !== t.start) {
                     t.start = newStart;
                     t._flashStart = true;
+                    didDateChange = true;
                     setTimeout(() => { if (t) delete t._flashStart; const el = document.getElementById(`date-cell-${t.id}-start`); if (el) el.classList.remove('flash-update'); }, 3000);
                 }
             } else if (field === 'estimate' && t.start) {
@@ -560,9 +643,20 @@ export function updateTask(pid, tid, field, value) {
                 if (newEnd && newEnd !== t.end) {
                     t.end = newEnd;
                     t._flashEnd = true;
+                    didDateChange = true;
                     setTimeout(() => { if (t) delete t._flashEnd; const el = document.getElementById(`date-cell-${t.id}-end`); if (el) el.classList.remove('flash-update'); }, 3000);
                 }
             }
+        } else {
+            // Hand-entered dates, just flag as changed so we ripple if end changed
+            if (field === 'start' || field === 'end') didDateChange = true;
+        }
+
+        // --- ASSIGNEE RIPPLE EFFECT ---
+        if (didDateChange && t.assignee) {
+            // Pass the pre-change end date so the logic knows what pool of tasks 
+            // were considered "downstream" before the change was applied.
+            shiftAssigneeTasks(t, oldEndStr);
         }
     }
 
