@@ -1,8 +1,7 @@
-import { isTauri, invoke, generateId, normalizeDate } from './helpers.js';
+import { isTauri, invoke, generateId, normalizeDate } from '../utils/helpers.js';
 import JSZip from 'jszip';
-// Note: Ensure @tauri-apps/plugin-dialog is installed
 import { save, open, message } from '@tauri-apps/plugin-dialog';
-import { getDefaultJapaneseHolidays } from './holidays.js';
+import { getDefaultJapaneseHolidays } from '../utils/holidays.js';
 
 export let project = null;
 export let currentFilePath = null; // Track current file path
@@ -57,6 +56,7 @@ export function resetData(name, start, end) {
     project.phases = [];
     currentFilePath = null; // Reset path on new
     lastLoadedTime = Date.now(); // Local initial time
+    clearHistory();
     saveState();
     triggerRender();
 }
@@ -69,10 +69,8 @@ export function getPixelsPerDay() {
 
 export const assigneeColors = { 'Unassigned': '#cbd5e1' };
 
-// Undo/Redo
-const undoStack = [];
-const redoStack = [];
-const MAX_HISTORY = 50;
+import { saveState, clearHistory, undo, redo } from './history.js';
+export { saveState, clearHistory, undo, redo };
 
 let _renderCallback = null;
 
@@ -83,34 +81,6 @@ export { onStateChange as setRenderCallback };
 
 export function triggerRender() {
     if (_renderCallback) _renderCallback();
-}
-
-export function saveState() {
-    if (!project) return;
-    undoStack.push(JSON.parse(JSON.stringify(project)));
-    if (undoStack.length > MAX_HISTORY) undoStack.shift();
-    redoStack.length = 0;
-
-    // Auto-save trigger
-    if (window.triggerAutoSave) window.triggerAutoSave();
-
-    // Check if we need to force update other views? 
-    // toggleDashboardView in main does re-render if visible.
-    // We assume renderCallback covers active view.
-}
-
-export function undo() {
-    if (undoStack.length === 0) return;
-    redoStack.push(JSON.parse(JSON.stringify(project)));
-    project = undoStack.pop();
-    triggerRender();
-}
-
-export function redo() {
-    if (redoStack.length === 0) return;
-    undoStack.push(JSON.parse(JSON.stringify(project)));
-    project = redoStack.pop();
-    triggerRender();
 }
 
 export function initTheme() {
@@ -291,7 +261,8 @@ export async function createNewProject(name, start, end) {
     selectedPhaseIds = [];
     currentFilePath = null;
     await updateWindowTitle(null);
-    undoStack.length = 0; redoStack.length = 0;
+    await updateWindowTitle(null);
+    clearHistory();
     return project;
 }
 

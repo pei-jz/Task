@@ -1,39 +1,73 @@
-import { project } from './state.js';
-import { normalizeDate } from './helpers.js';
+import { project } from '../core/state.js';
+import { normalizeDate } from '../utils/helpers.js';
 
 let resourceViewMode = 'week'; // 'day', 'week'
 let visiblePhaseIds = []; // IDs of phases to show in Phase S-Curve
+
+let currentAggPage = 'progress';
 
 export function renderAggregation() {
     const container = document.getElementById('aggregation-view');
     if (!container || !project) return;
     container.innerHTML = '';
     container.style.display = 'flex';
-    container.style.flexDirection = 'column';
-    container.style.gap = '2rem';
+    container.style.height = '100%';
+    container.style.gap = '1rem';
 
-    // Initialize visible phases if empty
+    // Sidebar
+    const sidebar = document.createElement('div');
+    sidebar.style.cssText = 'width:250px; background:var(--card-bg); border-right:1px solid var(--border-color); padding:1rem; display:flex; flex-direction:column; gap:0.5rem; flex-shrink:0;';
+
+    const menuItems = [
+        { id: 'progress', label: 'Progress (S-Curve)' },
+        { id: 'resource', label: 'Resource Load' }
+    ];
+
+    menuItems.forEach(item => {
+        const btn = document.createElement('div');
+        btn.className = `settings-menu-item ${currentAggPage === item.id ? 'active' : ''}`;
+        btn.textContent = item.label;
+        btn.onclick = () => {
+            currentAggPage = item.id;
+            renderAggregation();
+        };
+        sidebar.appendChild(btn);
+    });
+
+    // Content Area
+    const contentArea = document.createElement('div');
+    contentArea.style.cssText = 'flex:1; padding:1rem; overflow-y:auto; background:var(--bg-color); display:flex; flex-direction:column; gap:2rem;';
+
+    if (currentAggPage === 'progress') {
+        renderOverallCurve(contentArea);
+        renderPhaseCurve(contentArea);
+    } else if (currentAggPage === 'resource') {
+        // Render both chart and table in the same view
+        renderResourceChartSection(contentArea);
+        renderResourceTableSection(contentArea);
+    }
+
+    container.appendChild(sidebar);
+    container.appendChild(contentArea);
+}
+
+function renderOverallCurve(container) {
+    const overallData = calculateSCurveData(project.phases.flatMap(p => p.tasks));
+    container.appendChild(createSCurve('Overall Progress (Cumulative Tasks)', [overallData], ['Overall'], ['#3b82f6']));
+}
+
+function renderPhaseCurve(container) {
     if (visiblePhaseIds.length === 0 && project.phases.length > 0) {
         visiblePhaseIds = project.phases.map(p => p.id);
     }
 
-    // Row 1: S-Curves
-    const row1 = document.createElement('div');
-    row1.style.cssText = 'display:flex; flex-wrap:wrap; gap:1rem; width:100%; margin-bottom:1rem;';
-
-    // 1. Overall S-Curve
-    const overallData = calculateSCurveData(project.phases.flatMap(p => p.tasks));
-    row1.appendChild(createSCurve('Overall Progress (Cumulative Tasks)', [overallData], ['Overall'], ['#3b82f6']));
-
-    // 2. Phase S-Curve (Multi-line with Toggles)
     const phaseSection = document.createElement('div');
     phaseSection.className = 'chart-card';
-    phaseSection.style.cssText = 'background:var(--card-bg); padding:1rem; border:1px solid var(--border-color); border-radius:8px; flex:1; min-width:400px;';
+    phaseSection.style.cssText = 'background:var(--card-bg); padding:1rem; border:1px solid var(--border-color); border-radius:8px; width:100%; max-width:1000px;';
 
     const phaseHeader = document.createElement('div');
-    phaseHeader.innerHTML = '<h4 style="margin:0 0 1rem 0;">Progress by Phase</h4>';
+    phaseHeader.innerHTML = '<h3 style="margin:0 0 1rem 0;">Progress by Phase</h3>';
 
-    // Toggles
     const toggleContainer = document.createElement('div');
     toggleContainer.style.cssText = 'display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:1rem;';
     project.phases.forEach((p, i) => {
@@ -48,7 +82,7 @@ export function renderAggregation() {
         lbl.querySelector('input').onchange = (e) => {
             if (e.target.checked) visiblePhaseIds.push(p.id);
             else visiblePhaseIds = visiblePhaseIds.filter(id => id !== p.id);
-            renderAggregation();
+            renderAggregation(); // Re-render whole tab (fast enough usually)
         };
         toggleContainer.appendChild(lbl);
     });
@@ -73,21 +107,16 @@ export function renderAggregation() {
     if (phaseDatasets.length > 0) {
         phaseSection.appendChild(createMultiSCurve(phaseDatasets, phaseLabels, phaseColors));
     } else {
-        phaseSection.innerHTML += '<p>No phases selected or no data</p>';
+        phaseSection.innerHTML += '<p style="color:var(--text-secondary);">No phases selected or no data</p>';
     }
-    row1.appendChild(phaseSection);
-    container.appendChild(row1);
+    container.appendChild(phaseSection);
+}
 
-    // Row 2: Resources
-    const row2 = document.createElement('div');
-    row2.style.cssText = 'display:flex; flex-wrap:wrap; gap:1rem; width:100%;';
-
-    // 3. Resource Stacked Area Chart (Mountain)
+function renderResourceChartSection(container) {
     const resourceSection = document.createElement('div');
     resourceSection.className = 'chart-card';
-    resourceSection.style.cssText = 'background:var(--card-bg); padding:1rem; border:1px solid var(--border-color); border-radius:8px; flex:1; min-width:400px;';
+    resourceSection.style.cssText = 'background:var(--card-bg); padding:1rem; border:1px solid var(--border-color); border-radius:8px; width:100%; max-width:1000px;';
 
-    // Header + Toggle
     const header = document.createElement('div');
     header.style.display = 'flex';
     header.style.justifyContent = 'space-between';
@@ -104,24 +133,45 @@ export function renderAggregation() {
 
     const chartContainer = document.createElement('div');
     resourceSection.appendChild(chartContainer);
-    row2.appendChild(resourceSection);
+    container.appendChild(resourceSection);
 
     renderResourceAreaChart(chartContainer);
 
-    // 4. Data Table
+    setTimeout(() => {
+        const dayBtn = document.getElementById('res-day-btn');
+        const weekBtn = document.getElementById('res-week-btn');
+        if (dayBtn) dayBtn.onclick = () => { resourceViewMode = 'day'; renderAggregation(); };
+        if (weekBtn) weekBtn.onclick = () => { resourceViewMode = 'week'; renderAggregation(); };
+    }, 0);
+}
+
+function renderResourceTableSection(container) {
     const tableSection = document.createElement('div');
     tableSection.className = 'chart-card';
-    tableSection.style.cssText = 'background:var(--card-bg); padding:1rem; border:1px solid var(--border-color); border-radius:8px; overflow-x:auto; flex:1; min-width:400px;';
-    tableSection.innerHTML = `<h4 style="margin:0 0 1rem 0;">Resource Data Table</h4>`;
+    tableSection.style.cssText = 'background:var(--card-bg); padding:1rem; border:1px solid var(--border-color); border-radius:8px; overflow-x:auto; width:100%; max-width:1200px;';
+
+    const header = document.createElement('div');
+    header.style.display = 'flex';
+    header.style.justifyContent = 'space-between';
+    header.style.marginBottom = '1rem';
+    header.innerHTML = `<h3 style="margin:0;">Resource Data Table</h3>`;
+
+    const toggleGroup = document.createElement('div');
+    toggleGroup.innerHTML = `
+        <button id="res-day-btn-table" class="${resourceViewMode === 'day' ? 'primary-btn' : 'secondary-btn'}" style="padding:4px 8px; font-size:0.8rem;">Daily</button>
+        <button id="res-week-btn-table" class="${resourceViewMode === 'week' ? 'primary-btn' : 'secondary-btn'}" style="padding:4px 8px; font-size:0.8rem;">Weekly</button>
+    `;
+    header.appendChild(toggleGroup);
+    tableSection.appendChild(header);
+
     renderResourceTable(tableSection);
-    row2.appendChild(tableSection);
+    container.appendChild(tableSection);
 
-    container.appendChild(row2);
-
-    // Events
     setTimeout(() => {
-        document.getElementById('res-day-btn').onclick = () => { resourceViewMode = 'day'; renderAggregation(); };
-        document.getElementById('res-week-btn').onclick = () => { resourceViewMode = 'week'; renderAggregation(); };
+        const dayBtn = document.getElementById('res-day-btn-table');
+        const weekBtn = document.getElementById('res-week-btn-table');
+        if (dayBtn) dayBtn.onclick = () => { resourceViewMode = 'day'; renderAggregation(); };
+        if (weekBtn) weekBtn.onclick = () => { resourceViewMode = 'week'; renderAggregation(); };
     }, 0);
 }
 

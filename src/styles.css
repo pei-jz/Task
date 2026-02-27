@@ -21,7 +21,9 @@
   --wbs-row-height: 24px;
   --wbs-grid-color: #e2e8f0;
   --dependency-line-color: #cbd5e1;
-  --active-phase-row-bg: rgba(14, 165, 233, 0.05);
+  --active-phase-row-bg: #e2e8f0;
+  --active-phase-row-color: #334155;
+  /* Distinct Gray/Slate for phases */
 }
 
 [data-theme="dark"] {
@@ -44,7 +46,9 @@
   --timeline-grid-color: rgba(255, 255, 255, 0.08);
   --wbs-grid-color: rgba(255, 255, 255, 0.08);
   --dependency-line-color: #64748b;
-  --active-phase-row-bg: rgba(56, 189, 248, 0.1);
+  --active-phase-row-bg: #334155;
+  --active-phase-row-color: #cbd5e1;
+  /* Distinct Dark Slate for phases */
   /* More visible */
   --header-bg: #1e293b;
   /* Match card-bg */
@@ -1394,4 +1398,108 @@ body {
 .flash-update {
   animation: flashUpdate 3s cubic-bezier(0, 0.9, 0.5, 1) !important;
   border-radius: 4px;
+}
+
+/* Row Coloring Priority (Phase 34) - Modern Indicator Style */
+
+/* Light Mode Styles */
+.task-done td {
+  background-color: #f8fafc !important;
+  /* Very Light Slate */
+  color: #94a3b8 !important;
+  /* Muted Slate */
+  text-decoration: line-through;
+}
+
+.task-danger td {
+  background-color: #fef2f2 !important;
+  /* Extremely Light Red */
+}
+
+/* Add thick left border to the first cell for active/urgent tasks */
+.task-danger td:first-child {
+  box-shadow: inset 4px 0 0 0 #ef4444 !important;
+  /* Vivid Red Indicator */
+}
+
+.task-warning td {
+  background-color: #fefce8 !important;
+  /* Extremely Light Yellow */
+}
+
+.task-warning td:first-child {
+  box-shadow: inset 4px 0 0 0 #eab308 !important;
+  /* Bold Yellow Indicator */
+}
+
+.task-doing td {
+  background-color: #f0f9ff !important;
+  /* Extremely Light Blue */
+}
+
+.task-doing td:first-child {
+  box-shadow: inset 4px 0 0 0 #3b82f6 !important;
+  /* Blue Indicator */
+}
+
+/* Ensure inputs can still be read inside done tasks without strikethrough */
+.task-done td input,
+.task-done td select {
+  text-decoration: none;
+}
+
+.task-done td input,
+.task-done td select,
+.task-danger td input,
+.task-danger td select,
+.task-warning td input,
+.task-warning td select,
+.task-doing td input,
+.task-doing td select {
+  background-color: transparent !important;
+  color: inherit !important;
+}
+
+/* Phase Row Specifics */
+.wbs-table tr[style*="bold"] td,
+.task-phase td {
+  color: var(--active-phase-row-color) !important;
+}
+
+/* Row Coloring Priority - Dark Mode Variants */
+[data-theme="dark"] .task-done td {
+  background-color: #0f172a !important;
+  /* Very Dark BG, blends deeply */
+  color: #475569 !important;
+  /* Deep Faded Slate */
+}
+
+[data-theme="dark"] .task-danger td {
+  background-color: rgba(239, 68, 68, 0.1) !important;
+  /* Subtle Red Wash */
+}
+
+[data-theme="dark"] .task-danger td:first-child {
+  box-shadow: inset 4px 0 0 0 #f87171 !important;
+  /* Bright Red Indicator */
+}
+
+[data-theme="dark"] .task-warning td {
+  background-color: rgba(234, 179, 8, 0.1) !important;
+  /* Subtle Yellow Wash */
+}
+
+[data-theme="dark"] .task-warning td:first-child {
+  box-shadow: inset 4px 0 0 0 #facc15 !important;
+  /* Bright Yellow Indicator */
+}
+
+[data-theme="dark"] .task-doing td {
+  background-color: rgba(59, 130, 246, 0.1) !important;
+  /* Subtle Blue Wash */
+}
+
+[data-theme="dark"] .task-doing td:first-child {
+  box-shadow: inset 4px 0 0 0 #60a5fa !important;
+  /* Bright Blue Indicator */
 }

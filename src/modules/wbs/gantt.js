@@ -1,7 +1,8 @@
-import { project, selectedPhaseIds, setSelectedPhaseIds, saveState, viewMode, zoomRange, setViewMode, setZoomRange, ganttZoomMode } from './state.js';
-import { normalizeDate, isBusinessDay, isHoliday, getDayOfWeek } from './helpers.js';
-import { renderWBS, addMilestoneInfo } from './wbs.js';
-import { showModal } from './ui.js';
+import { project, selectedPhaseIds, setSelectedPhaseIds, saveState, viewMode, zoomRange, setViewMode, setZoomRange, ganttZoomMode } from '../core/state.js';
+import { normalizeDate, getDayOfWeek } from '../utils/helpers.js';
+import { isBusinessDay, isHoliday } from '../utils/dateCalc.js';
+import { renderWBS, addMilestoneInfo } from './index.js';
+import { showModal } from '../ui/modal.js';
 
 let isTimelineCollapsed = false;
 

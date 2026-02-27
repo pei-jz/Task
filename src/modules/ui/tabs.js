@@ -1,8 +1,8 @@
-import { renderAggregation } from './aggregation.js';
+import { renderAggregation } from '../features/aggregation.js';
 import { setupSettingsTab } from './settings.js';
-import { renderDashboard } from './dashboard.js';
-import { renderWBS } from './wbs.js';
-import { renderTimeline } from './gantt.js';
+import { renderDashboard } from '../features/dashboard.js';
+import { renderWBS } from '../wbs/index.js';
+import { renderTimeline } from '../wbs/gantt.js';
 
 export function setupTabs() {
     const tabs = document.querySelectorAll('.tab-btn');

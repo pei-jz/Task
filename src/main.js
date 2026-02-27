@@ -3,24 +3,20 @@ import {
     project, loadData, loadFile, saveData, resetData, undo, redo,
     zoomGantt, setRenderCallback, toggleTheme, initTheme,
     selectedPhaseIds, setSelectedPhaseIds
-} from './modules/state.js';
-import {
-    renderTimeline, getDateRange
-} from './modules/gantt.js';
+} from './modules/core/state.js';
 import {
     renderWBS, updateTask, updateTaskDate, toggleTask, togglePhase, initiateTaskDeletion,
     openAddTaskModal, selectCell, enterEditMode, moveSelection,
     openFilterMenu, closeFilterPopup,
-    addMilestoneInfo, addPhaseInfo, openImportModal, importWBSFromText,
-    openAssigneeSettings, closeAssigneeSettings, addAssignee, deleteAssignee,
-    openHolidayManager, removeHoliday, setupWBSEvents
-} from './modules/wbs.js';
+    addMilestoneInfo, addPhaseInfo, openImportModal, importWBSFromText, exportWBSToHTML,
+    setupWBSEvents, renderTimeline, getDateRange
+} from './modules/wbs/index.js';
 import {
     renderDashboard, toggleDashboardView, renderMiniDashboard
-} from './modules/dashboard.js';
-import { setupGlobalEvents } from './modules/events.js';
-import { setupTabs } from './modules/tabs.js';
-import { showModal } from './modules/ui.js';
+} from './modules/features/dashboard.js';
+import { setupGlobalEvents } from './modules/wbs/events.js';
+import { setupTabs } from './modules/ui/tabs.js';
+import { showModal } from './modules/ui/modal.js';
 
 // --- Global Exports (for inline HTML handlers) ---
 window.updateTask = updateTask;
@@ -35,14 +31,8 @@ window.closeFilterPopup = closeFilterPopup;
 window.addMilestoneInfo = addMilestoneInfo;
 window.addPhaseInfo = addPhaseInfo;
 window.openImportModal = openImportModal;
-window.openAssigneeSettings = openAssigneeSettings;
-window.closeAssigneeSettings = closeAssigneeSettings;
-window.addAssignee = addAssignee;
-window.deleteAssignee = deleteAssignee;
-window.openHolidayManager = openHolidayManager;
-window.removeHoliday = removeHoliday;
-window.addAssignee = addAssignee;
-window.deleteAssignee = deleteAssignee;
+window.exportWBSToHTML = exportWBSToHTML;
+// Deprecated settings window globals removed
 window.toggleDashboardView = toggleDashboardView;
 // window.enterEditMode = enterEditMode; // Maybe needed if double click handler in HTML uses it? YES.
 window.enterEditMode = enterEditMode;
@@ -114,8 +104,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     // Bind Toolbar Buttons
     document.getElementById('add-phase-btn')?.addEventListener('click', addPhaseInfo);
     document.getElementById('add-milestone-btn')?.addEventListener('click', addMilestoneInfo);
-    document.getElementById('manage-assignees-btn')?.addEventListener('click', openAssigneeSettings);
-    document.getElementById('manage-holidays-btn')?.addEventListener('click', openHolidayManager);
+    // Deprecated header buttons removed
     document.getElementById('import-btn')?.addEventListener('click', openImportModal);
     document.getElementById('theme-toggle-btn')?.addEventListener('click', toggleTheme);
 

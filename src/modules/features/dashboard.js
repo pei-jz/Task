@@ -1,11 +1,18 @@
-import { project } from './state.js';
-import { getDateRange } from './gantt.js';
+import { project } from '../core/state.js';
+import { getDateRange } from '../wbs/gantt.js';
 
 export function renderDashboard() {
     if (!project) return;
     const container = document.querySelector('.dashboard-grid');
     if (!container) return;
     container.innerHTML = '';
+
+    // Ensure the container can scroll vertically if content overflows
+    const wrapper = container.parentElement;
+    if (wrapper) {
+        wrapper.style.overflowY = 'auto';
+        wrapper.style.maxHeight = '100%';
+    }
 
     const totalTasks = countTasks(project.phases);
     const completedTasks = countCompletedTasks(project.phases);
@@ -75,25 +82,48 @@ function getPhaseStats(phases) {
     const today = new Date(); today.setHours(0, 0, 0, 0);
     return phases.map((p, i) => {
         let total = 0;
+        let done = 0;
         let delayed = 0;
         const traverse = (tasks) => {
             tasks.forEach(t => {
                 total++;
-                if (t.end) {
+                if (t.progress === 100) {
+                    done++;
+                } else if (t.end) {
                     const e = new Date(t.end);
-                    if (e < today && t.progress < 100) delayed++;
+                    if (e < today) delayed++;
                 }
                 if (t.subtasks) traverse(t.subtasks);
             });
         };
         traverse(p.tasks);
-        return { title: p.name || `Phase ${i + 1}`, total, delayed };
+        return { title: p.name || `Phase ${i + 1}`, total, done, delayed };
     });
 }
 // kept getAssigneeStats below but updated logic
 function getAssigneeStats() {
     const stats = {};
     const today = new Date(); today.setHours(0, 0, 0, 0);
+
+    // Initialize all project assignees to show 0 workload instead of disappearing
+    stats['Unassigned'] = { name: 'Unassigned', total: 0, planned: 0, done: 0, delayed: 0 };
+
+    // First pass: collect all unique assignee names from project and actual tasks
+    const allNames = new Set();
+    if (project.assignees) project.assignees.forEach(a => allNames.add(a.name || a));
+
+    const collectNames = (tasks) => {
+        tasks.forEach(t => {
+            if (t.assignee) allNames.add(t.assignee.name || t.assignee);
+            if (t.subtasks) collectNames(t.subtasks);
+        });
+    };
+    project.phases.forEach(p => collectNames(p.tasks));
+
+    // Initialize stats object for all discovered names
+    allNames.forEach(n => {
+        if (!stats[n]) stats[n] = { name: n, total: 0, planned: 0, done: 0, delayed: 0 };
+    });
 
     const traverse = (tasks) => {
         tasks.forEach(t => {
@@ -186,13 +216,14 @@ export function renderMiniDashboard() {
 
     // 3. Workload Card (Top 5)
     // Modified: Show delayed tasks count as requested
-    const assigneeStats = getAssigneeStats().sort((a, b) => b.total - a.total).slice(0, 5);
+    // 3. Workload Card
+    const assigneeStats = getAssigneeStats().sort((a, b) => b.total - a.total);
     const workloadCard = document.createElement('div');
     workloadCard.style.cssText = cardStyle + ' min-width: 300px;';
     workloadCard.innerHTML = `<h3 style="margin:0 0 0.5rem 0; font-size:1rem; color:var(--text-primary);">Assignee Workload</h3>`;
 
     const ul = document.createElement('ul');
-    ul.style.listStyle = 'none'; ul.style.padding = 0; ul.style.margin = 0; ul.style.flex = '1'; ul.style.overflowY = 'auto';
+    ul.style.listStyle = 'none'; ul.style.padding = 0; ul.style.margin = 0; ul.style.flex = '1'; ul.style.overflowY = 'auto'; ul.style.maxHeight = '250px'; ul.style.paddingRight = '12px';
     assigneeStats.forEach(a => {
         const delayedText = a.delayed > 0 ? `<span style="color:#ef4444; margin-left:4px;">(${a.delayed}⚠)</span>` : '';
         ul.innerHTML += `
@@ -215,14 +246,14 @@ export function renderMiniDashboard() {
     phaseCard.innerHTML = `<h3 style="margin:0 0 0.5rem 0; font-size:1rem; color:var(--text-primary);">Phase Health</h3>`;
 
     const pUl = document.createElement('ul');
-    pUl.style.listStyle = 'none'; pUl.style.padding = 0; pUl.style.margin = 0; pUl.style.flex = '1'; pUl.style.overflowY = 'auto';
+    pUl.style.listStyle = 'none'; pUl.style.padding = 0; pUl.style.margin = 0; pUl.style.flex = '1'; pUl.style.overflowY = 'auto'; pUl.style.maxHeight = '250px'; pUl.style.paddingRight = '12px';
     phaseStats.forEach(p => {
         const delayedText = p.delayed > 0 ? `<span style="color:#ef4444; margin-left:4px;">(${p.delayed}⚠)</span>` : '';
         pUl.innerHTML += `
             <li style="display:flex; justify-content:space-between; margin-bottom:0.5rem; font-size:0.85rem;">
                 <span title="${p.title}" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:150px;">${p.title}</span>
                 <span>
-                     <span style="color:var(--text-secondary)">Total:</span> <strong>${p.total}</strong>
+                     <span style="color:var(--text-secondary)">${p.done}/</span><strong>${p.total}</strong>
                      ${delayedText}
                 </span>
             </li>

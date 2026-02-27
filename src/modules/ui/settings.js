@@ -1,4 +1,4 @@
-import { project, saveState, assigneeColors } from './state.js';
+import { project, saveState, assigneeColors } from '../core/state.js';
 
 export function setupSettingsTab() {
     const sidebarItems = document.querySelectorAll('.settings-menu-item');
