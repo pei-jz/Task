@@ -2,7 +2,7 @@
 import {
     project, loadData, loadFile, saveData, resetData, undo, redo,
     zoomGantt, setRenderCallback, toggleTheme, initTheme,
-    selectedPhaseIds, setSelectedPhaseIds
+    selectedPhaseIds, setSelectedPhaseIds, toggleAutoSchedule
 } from './modules/core/state.js';
 import {
     renderWBS, updateTask, updateTaskDate, toggleTask, togglePhase, initiateTaskDeletion,
@@ -85,12 +85,12 @@ window.addEventListener('DOMContentLoaded', async () => {
             <input id="new-project-start" type="date" class="modal-input" value="${new Date().toISOString().split('T')[0]}">
             <label>End Date</label>
             <input id="new-project-end" type="date" class="modal-input" value="${new Date().toISOString().split('T')[0]}">
-        `, () => {
+        `, async () => {
             const name = document.getElementById('new-project-name').value;
             const start = document.getElementById('new-project-start').value;
             const end = document.getElementById('new-project-end').value;
             if (name && start && end) {
-                resetData(name, start, end);
+                await resetData(name, start, end);
                 hideStartScreen();
             }
         });
@@ -103,10 +103,15 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     // Bind Toolbar Buttons
     document.getElementById('add-phase-btn')?.addEventListener('click', addPhaseInfo);
-    document.getElementById('add-milestone-btn')?.addEventListener('click', addMilestoneInfo);
+    // document.getElementById('add-milestone-btn')?.addEventListener('click', addMilestoneInfo); // Removed
+    document.getElementById('execute-auto-schedule-btn')?.addEventListener('click', async () => {
+        const { openBatchAutoScheduleModal } = await import('./modules/wbs/index.js');
+        openBatchAutoScheduleModal();
+    });
     // Deprecated header buttons removed
     document.getElementById('import-btn')?.addEventListener('click', openImportModal);
     document.getElementById('theme-toggle-btn')?.addEventListener('click', toggleTheme);
+    document.getElementById('auto-schedule-toggle')?.addEventListener('change', toggleAutoSchedule);
 
     // Initial Render - Check if project exists to hide start screen?
     // Actually, we want to SHOW start screen by default if no project loaded.

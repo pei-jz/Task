@@ -15,6 +15,7 @@
     "dialog:allow-open",
     "fs:default",
     "core:event:default",
+    "core:window:allow-set-title",
     "process:allow-exit"
   ]
 }

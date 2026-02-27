@@ -1,8 +1,8 @@
 import { project, selectedPhaseIds, saveState } from '../core/state.js';
 import { generateId, findTask } from '../utils/helpers.js';
-import { shiftAssigneeTasks, recalculatePhase } from './logic.js';
+import { shiftAssigneeTasks, executeBatchAutoSchedule, recalculatePhase } from './logic.js';
 import { calculateEndDateFromStart, calculateStartDateFromEnd } from '../utils/dateCalc.js';
-import { triggerRender } from '../core/state.js';
+import { triggerRender, isAutoScheduleEnabled } from '../core/state.js';
 import { showModal, showDatePicker } from '../ui/modal.js';
 import { wbsState } from './state.js';
 
@@ -41,9 +41,17 @@ export function updateTask(pid, tid, field, value) {
         value = parseFloat(value) || 0;
     }
 
+    let didDateChange = false;
+    let oldEndStr = t.end;
+    let oldStartStr = t.start;
+
     if (field === 'assignee') {
         const assignObj = project.assignees.find(a => a.name === value);
         t.assignee = assignObj || value;
+        // Shift downstream tasks when assignee changes
+        if (isAutoScheduleEnabled) {
+            shiftAssigneeTasks(t, oldEndStr);
+        }
     } else if (field === 'status') {
         t.status = value;
         const now = new Date().toISOString().split('T')[0];
@@ -54,10 +62,6 @@ export function updateTask(pid, tid, field, value) {
         else t.predecessors = value;
     } else {
         t[field] = value;
-
-        let oldEndStr = t.end;
-        let oldStartStr = t.start;
-        let didDateChange = false;
 
         if (t.estimate && t.estimate > 0) {
             if (field === 'start' && value) {
@@ -89,7 +93,7 @@ export function updateTask(pid, tid, field, value) {
             if (field === 'start' || field === 'end') didDateChange = true;
         }
 
-        if (didDateChange && t.assignee) {
+        if (didDateChange && t.assignee && isAutoScheduleEnabled) {
             shiftAssigneeTasks(t, oldEndStr);
         }
     }
@@ -374,3 +378,56 @@ export async function handleDeleteKey() {
     }
 }
 
+export function openBatchAutoScheduleModal() {
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    // Build Assignee Checkboxes
+    let assigneeHtml = project.assignees && project.assignees.length > 0
+        ? project.assignees.map(a => `
+            <label style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.2rem;">
+                <input type="checkbox" class="assignee-batch-check" value="${a.name}">
+                <span><span class="color-dot" style="background:${a.color};"></span> ${a.name}</span>
+            </label>
+        `).join('')
+        : `<p style="color:var(--text-secondary); font-size:0.8rem;">No assignees defined in project.</p>`;
+
+    const html = `
+        <div style="margin-bottom:1rem; padding:0.5rem; background:rgba(255,165,0,0.1); border-left:4px solid orange; font-size:0.8rem;">
+            この操作は、選択した担当者のタスクを一括して自動スケジュールします。休日のスキップや、すでに完了したタスクの除外ルールが適用されます。<br>
+            ※ 条件を選択しない場合は、すべての担当者の「システム日付以降」のタスクが一括調整されます。
+        </div>
+        
+        <div style="margin-bottom:1.5rem;">
+            <label style="font-weight:bold; display:block; margin-bottom:0.5rem;">条件1: 担当者選択 (Assignees)</label>
+            <div style="max-height: 150px; overflow-y:auto; border:1px solid var(--border-color); padding:0.5rem; border-radius:4px;">
+                ${assigneeHtml}
+            </div>
+            <div style="margin-top:0.3rem; font-size:0.75rem; color:var(--text-secondary);">
+                ※ 何もチェックしない場合、全担当者が対象になります。
+            </div>
+        </div>
+
+        <div style="margin-bottom:1rem;">
+            <label style="font-weight:bold; display:block; margin-bottom:0.5rem;">条件2: 開始日 (Start Date)</label>
+            <input type="date" id="batch-schedule-start" class="modal-input" value="${todayStr}">
+            <div style="margin-top:0.3rem; font-size:0.75rem; color:var(--text-secondary);">
+                ※ この日付以降に開始するタスクのみが調整対象になります。未指定時は本日(${todayStr})が基準となります。
+            </div>
+        </div>
+    `;
+
+    showModal('スケージュール自動調整', html, () => {
+        saveState();
+
+        const checkedNodes = document.querySelectorAll('.assignee-batch-check:checked');
+        const selectedAssignees = Array.from(checkedNodes).map(node => node.value);
+
+        const dateInput = document.getElementById('batch-schedule-start');
+        const startDateStr = dateInput && dateInput.value ? dateInput.value : todayStr;
+
+        executeBatchAutoSchedule(selectedAssignees, startDateStr);
+        project.phases.forEach(recalculatePhase);
+
+        triggerRender();
+    });
+}

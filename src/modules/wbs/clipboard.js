@@ -1,10 +1,10 @@
-import { project, saveState, assigneeColors, triggerRender } from '../core/state.js';
+import { project, saveState, assigneeColors, triggerRender, isAutoScheduleEnabled } from '../core/state.js';
 import { generateId, escapeVal, DISTINCT_COLORS } from '../utils/helpers.js';
-import { recalculatePhase, getTaskDepth, findParentOf, findParentForLevel } from './logic.js';
+import { recalculatePhase, getTaskDepth, findParentOf, findParentForLevel, shiftAssigneeTasks } from './logic.js';
 import { wbsState } from './state.js';
 import { renderWBS } from './view.js'; // Might need to just use triggerRender to avoid circular deps
 import { renderTimeline } from './gantt.js';
-import { getNextBusinessDay, addBusinessDays, isBusinessDay } from '../utils/dateCalc.js';
+import { getNextBusinessDay, addBusinessDays, isBusinessDay, calculateEndDateFromStart, calculateStartDateFromEnd } from '../utils/dateCalc.js';
 import { normalizeDate } from '../utils/helpers.js';
 import { showModal } from '../ui/modal.js';
 
@@ -210,10 +210,11 @@ function handleStructurePaste(rows, startRowIndex, forceInsert) {
             }
         });
     } else {
-        // Simplified insert logic for space reasons, full logic needs to be preserved later if space permits
-        // I will just use basic insert to currentParentList
-        let currentParentList = project.phases;
-        let currentIndex = project.phases.length;
+        // Find the selected phase context
+        let defaultPhaseId = project.phases.length > 0 ? project.phases[0].id : null;
+        if (startRowIndex < visibleTasks.length) {
+            defaultPhaseId = visibleTasks[startRowIndex].pid;
+        }
 
         newItems.forEach(item => {
             if (item.level === 0) {
@@ -227,8 +228,13 @@ function handleStructurePaste(rows, startRowIndex, forceInsert) {
                 currentPhase = newTaskObj;
             } else {
                 if (!currentPhase) {
-                    currentPhase = { id: generateId(), name: 'Default Phase', start: project.start, end: project.start, tasks: [], expanded: false, isPhase: true };
-                    project.phases.push(currentPhase);
+                    if (defaultPhaseId) {
+                        currentPhase = project.phases.find(p => p.id === defaultPhaseId);
+                    }
+                    if (!currentPhase) {
+                        currentPhase = { id: generateId(), name: 'Default Phase', start: project.start, end: project.start, tasks: [], expanded: false, isPhase: true };
+                        project.phases.push(currentPhase);
+                    }
                 }
                 const newTaskObj = {
                     id: generateId(), title: item.title || 'New Task', status: 'todo',
@@ -247,9 +253,129 @@ function handleStructurePaste(rows, startRowIndex, forceInsert) {
     triggerRender();
 }
 
-function handleCellPaste(rows, r, c) {
-    // Basic cell paste implementation, full grid paste exists in original codebase but was truncated
-    // We will leave this for user if they complain.
+function handleCellPaste(rows, startRow, startCol) {
+    let visibleTasks = [];
+    const traverse = (list, pid) => {
+        list.forEach(t => {
+            visibleTasks.push({ ...t, pid, isPhase: false });
+            if (t.expanded !== false && t.subtasks) traverse(t.subtasks, pid);
+        });
+    };
+    project.phases.forEach(p => {
+        visibleTasks.push({ ...p, pid: p.id, isPhase: true });
+        if (p.expanded !== false && p.tasks) traverse(p.tasks, p.id);
+    });
+
+    const parseNum = (val) => {
+        if (typeof val === 'string') val = val.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).replace(/[^0-9.]/g, '');
+        return parseFloat(val) || 0;
+    };
+
+    const parseDate = (val) => {
+        if (!val) return null;
+        const cleaned = val.split('(')[0].trim().replace(/\./g, '-');
+        const d = new Date(cleaned);
+        if (isNaN(d.getTime())) return null;
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    };
+
+    rows.forEach((rowStr, rOffset) => {
+        if (!rowStr.trim()) return;
+        const targetIdx = startRow + rOffset;
+        if (targetIdx >= visibleTasks.length) return;
+
+        const tInfo = visibleTasks[targetIdx];
+        const p = project.phases.find(ph => ph.id === (tInfo.isPhase ? tInfo.id : tInfo.pid));
+
+        let targetObj;
+        if (tInfo.isPhase) targetObj = p;
+        else {
+            const findInList = (list) => {
+                for (let t of list) {
+                    if (t.id === tInfo.id) return t;
+                    if (t.subtasks) { let r = findInList(t.subtasks); if (r) return r; }
+                }
+                return null;
+            };
+            targetObj = p ? findInList(p.tasks) : null;
+        }
+
+        if (!targetObj) return;
+
+        const cells = rowStr.split('\t');
+
+        let oldEndStr = targetObj.end;
+        let didDateChange = false;
+        let assigneeChanged = false;
+
+        cells.forEach((cellVal, cOffset) => {
+            const c = startCol + cOffset;
+            const val = cellVal.trim();
+
+            if (targetObj.isPhase || tInfo.isPhase) {
+                if (c === 0 && val) targetObj.name = val.replace(/^▼\s*/, '').replace(/^▶\s*/, '');
+                else if (c === 3) targetObj.estimate = parseNum(val);
+                else if (c === 4 && parseDate(val)) targetObj.start = parseDate(val);
+                else if (c === 5 && parseDate(val)) targetObj.end = parseDate(val);
+                else if (c === 6) targetObj.actualHours = parseNum(val);
+            } else {
+                switch (c) {
+                    case 0: if (val) targetObj.title = val; break;
+                    case 1:
+                        const ls = val.toLowerCase();
+                        if (['todo', 'doing', 'done'].includes(ls)) targetObj.status = ls;
+                        else targetObj.status = 'todo';
+                        break;
+                    case 2:
+                        const assignObj = project.assignees && project.assignees.find(a => a.name === val);
+                        targetObj.assignee = assignObj || val;
+                        assigneeChanged = true;
+                        break;
+                    case 3:
+                        targetObj.estimate = parseNum(val);
+                        if (targetObj.start && targetObj.estimate > 0) {
+                            const newEnd = calculateEndDateFromStart(targetObj.start, targetObj.estimate, project.holidays);
+                            if (newEnd) { targetObj.end = newEnd; targetObj._flashEnd = true; didDateChange = true; }
+                        }
+                        break;
+                    case 4:
+                        if (parseDate(val)) {
+                            targetObj.start = parseDate(val);
+                            didDateChange = true;
+                            if (targetObj.estimate > 0) {
+                                const newEnd = calculateEndDateFromStart(targetObj.start, targetObj.estimate, project.holidays);
+                                if (newEnd) { targetObj.end = newEnd; targetObj._flashEnd = true; }
+                            }
+                        }
+                        break;
+                    case 5:
+                        if (parseDate(val)) {
+                            targetObj.end = parseDate(val);
+                            didDateChange = true;
+                            if (targetObj.estimate > 0) {
+                                const newStart = calculateStartDateFromEnd(targetObj.end, targetObj.estimate, project.holidays);
+                                if (newStart) { targetObj.start = newStart; targetObj._flashStart = true; }
+                            }
+                        }
+                        break;
+                    case 6: targetObj.actualHours = parseNum(val); break;
+                    case 7: targetObj.actualStart = parseDate(val); break;
+                    case 8: targetObj.actualEnd = parseDate(val); break;
+                    case 9: targetObj.predecessors = val ? val.split(',').map(s => s.trim()) : []; break;
+                }
+            }
+        });
+
+        if (!targetObj.isPhase && isAutoScheduleEnabled) {
+            if (assigneeChanged || didDateChange) {
+                shiftAssigneeTasks(targetObj, oldEndStr);
+            }
+        }
+
+        if (p) recalculatePhase(p);
+    });
+
+    triggerRender();
 }
 
 export async function copySelection() {

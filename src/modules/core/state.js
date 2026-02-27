@@ -40,6 +40,12 @@ export function setViewMode(m) { viewMode = m; }
 export let selectedPhaseIds = [];
 export function setSelectedPhaseIds(ids) { selectedPhaseIds = ids; }
 
+export let isAutoScheduleEnabled = true;
+export function toggleAutoSchedule() {
+    isAutoScheduleEnabled = !isAutoScheduleEnabled;
+    triggerRender();
+}
+
 export let ganttZoomMode = 'day';
 export function setGanttZoomMode(m) { ganttZoomMode = m; }
 
@@ -50,13 +56,12 @@ export function zoomGantt() {
     triggerRender();
 }
 
-export function resetData(name, start, end) {
+export async function resetData(name, start, end) {
     const d = new Date().toISOString().split('T')[0];
-    project = createNewProject(name || 'New Project', start || d, end || d);
+    await createNewProject(name || 'New Project', start || d, end || d);
     project.phases = [];
     currentFilePath = null; // Reset path on new
     lastLoadedTime = Date.now(); // Local initial time
-    clearHistory();
     saveState();
     triggerRender();
 }
@@ -260,7 +265,6 @@ export async function createNewProject(name, start, end) {
     };
     selectedPhaseIds = [];
     currentFilePath = null;
-    await updateWindowTitle(null);
     await updateWindowTitle(null);
     clearHistory();
     return project;

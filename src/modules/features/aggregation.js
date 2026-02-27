@@ -2,7 +2,9 @@ import { project } from '../core/state.js';
 import { normalizeDate } from '../utils/helpers.js';
 
 let resourceViewMode = 'week'; // 'day', 'week'
+let scurveViewMode = 'day'; // 'day', 'week'
 let visiblePhaseIds = []; // IDs of phases to show in Phase S-Curve
+let resourceTableTranspose = false;
 
 let currentAggPage = 'progress';
 
@@ -20,6 +22,9 @@ export function renderAggregation() {
 
     const menuItems = [
         { id: 'progress', label: 'Progress (S-Curve)' },
+        { id: 'burndown', label: 'Burndown Chart' },
+        { id: 'variance', label: 'Variance Analysis' },
+        { id: 'status', label: 'Status Distribution' },
         { id: 'resource', label: 'Resource Load' }
     ];
 
@@ -41,6 +46,12 @@ export function renderAggregation() {
     if (currentAggPage === 'progress') {
         renderOverallCurve(contentArea);
         renderPhaseCurve(contentArea);
+    } else if (currentAggPage === 'burndown') {
+        renderBurndownChart(contentArea);
+    } else if (currentAggPage === 'variance') {
+        renderVarianceChart(contentArea);
+    } else if (currentAggPage === 'status') {
+        renderStatusDistribution(contentArea);
     } else if (currentAggPage === 'resource') {
         // Render both chart and table in the same view
         renderResourceChartSection(contentArea);
@@ -52,8 +63,38 @@ export function renderAggregation() {
 }
 
 function renderOverallCurve(container) {
+    const section = document.createElement('div');
+    section.className = 'chart-card';
+    section.style.cssText = 'background:var(--card-bg); padding:1rem; border:1px solid var(--border-color); border-radius:8px; width:70%; min-width:600px; margin: 0 auto; flex-shrink:0;';
+
+    const header = document.createElement('div');
+    header.style.display = 'flex';
+    header.style.justifyContent = 'space-between';
+    header.style.marginBottom = '1rem';
+    header.innerHTML = `<h3 style="margin:0;">Overall Progress (Cumulative Tasks)</h3>`;
+
+    const toggleGroup = document.createElement('div');
+    toggleGroup.innerHTML = `
+        <button id="scurve-day-btn" class="${scurveViewMode === 'day' ? 'primary-btn' : 'secondary-btn'}" style="padding:4px 8px; font-size:0.8rem;">Daily</button>
+        <button id="scurve-week-btn" class="${scurveViewMode === 'week' ? 'primary-btn' : 'secondary-btn'}" style="padding:4px 8px; font-size:0.8rem;">Weekly</button>
+    `;
+    header.appendChild(toggleGroup);
+    section.appendChild(header);
+
     const overallData = calculateSCurveData(project.phases.flatMap(p => p.tasks));
-    container.appendChild(createSCurve('Overall Progress (Cumulative Tasks)', [overallData], ['Overall'], ['#3b82f6']));
+    if (overallData) {
+        section.appendChild(createSCurve('', [overallData], ['Overall'], ['#3b82f6']));
+    } else {
+        section.innerHTML += '<p>No data</p>';
+    }
+    container.appendChild(section);
+
+    setTimeout(() => {
+        const dayBtn = document.getElementById('scurve-day-btn');
+        const weekBtn = document.getElementById('scurve-week-btn');
+        if (dayBtn) dayBtn.onclick = () => { scurveViewMode = 'day'; renderAggregation(); };
+        if (weekBtn) weekBtn.onclick = () => { scurveViewMode = 'week'; renderAggregation(); };
+    }, 0);
 }
 
 function renderPhaseCurve(container) {
@@ -63,7 +104,7 @@ function renderPhaseCurve(container) {
 
     const phaseSection = document.createElement('div');
     phaseSection.className = 'chart-card';
-    phaseSection.style.cssText = 'background:var(--card-bg); padding:1rem; border:1px solid var(--border-color); border-radius:8px; width:100%; max-width:1000px;';
+    phaseSection.style.cssText = 'background:var(--card-bg); padding:1rem; border:1px solid var(--border-color); border-radius:8px; width:70%; min-width:600px; margin: 0 auto; flex-shrink:0;';
 
     const phaseHeader = document.createElement('div');
     phaseHeader.innerHTML = '<h3 style="margin:0 0 1rem 0;">Progress by Phase</h3>';
@@ -115,7 +156,7 @@ function renderPhaseCurve(container) {
 function renderResourceChartSection(container) {
     const resourceSection = document.createElement('div');
     resourceSection.className = 'chart-card';
-    resourceSection.style.cssText = 'background:var(--card-bg); padding:1rem; border:1px solid var(--border-color); border-radius:8px; width:100%; max-width:1000px;';
+    resourceSection.style.cssText = 'background:var(--card-bg); padding:1rem; border:1px solid var(--border-color); border-radius:8px; width:70%; min-width:600px; margin: 0 auto; flex-shrink:0;';
 
     const header = document.createElement('div');
     header.style.display = 'flex';
@@ -148,7 +189,7 @@ function renderResourceChartSection(container) {
 function renderResourceTableSection(container) {
     const tableSection = document.createElement('div');
     tableSection.className = 'chart-card';
-    tableSection.style.cssText = 'background:var(--card-bg); padding:1rem; border:1px solid var(--border-color); border-radius:8px; overflow-x:auto; width:100%; max-width:1200px;';
+    tableSection.style.cssText = 'background:var(--card-bg); padding:1rem; border:1px solid var(--border-color); border-radius:8px; overflow-x:auto; width:100%; flex-shrink:0;';
 
     const header = document.createElement('div');
     header.style.display = 'flex';
@@ -157,9 +198,14 @@ function renderResourceTableSection(container) {
     header.innerHTML = `<h3 style="margin:0;">Resource Data Table</h3>`;
 
     const toggleGroup = document.createElement('div');
+    toggleGroup.style.display = 'flex';
+    toggleGroup.style.gap = '8px';
     toggleGroup.innerHTML = `
-        <button id="res-day-btn-table" class="${resourceViewMode === 'day' ? 'primary-btn' : 'secondary-btn'}" style="padding:4px 8px; font-size:0.8rem;">Daily</button>
-        <button id="res-week-btn-table" class="${resourceViewMode === 'week' ? 'primary-btn' : 'secondary-btn'}" style="padding:4px 8px; font-size:0.8rem;">Weekly</button>
+        <button id="res-transpose-btn" class="secondary-btn" style="padding:4px 12px; font-size:0.8rem;">Change Rows/Cols (⇄)</button>
+        <div>
+            <button id="res-day-btn-table" class="${resourceViewMode === 'day' ? 'primary-btn' : 'secondary-btn'}" style="padding:4px 8px; font-size:0.8rem;">Daily</button>
+            <button id="res-week-btn-table" class="${resourceViewMode === 'week' ? 'primary-btn' : 'secondary-btn'}" style="padding:4px 8px; font-size:0.8rem;">Weekly</button>
+        </div>
     `;
     header.appendChild(toggleGroup);
     tableSection.appendChild(header);
@@ -168,8 +214,10 @@ function renderResourceTableSection(container) {
     container.appendChild(tableSection);
 
     setTimeout(() => {
+        const transBtn = document.getElementById('res-transpose-btn');
         const dayBtn = document.getElementById('res-day-btn-table');
         const weekBtn = document.getElementById('res-week-btn-table');
+        if (transBtn) transBtn.onclick = () => { resourceTableTranspose = !resourceTableTranspose; renderAggregation(); };
         if (dayBtn) dayBtn.onclick = () => { resourceViewMode = 'day'; renderAggregation(); };
         if (weekBtn) weekBtn.onclick = () => { resourceViewMode = 'week'; renderAggregation(); };
     }, 0);
@@ -276,7 +324,7 @@ function createSCurve(title, datasets, labels, colors) {
 
 function createMultiSCurve(datasets, labels, colors, title) {
     const wrapper = document.createElement('div');
-    wrapper.style.cssText = 'background:var(--card-bg); padding:1rem; border:1px solid var(--border-color); border-radius:8px; flex:1; min-width:400px;';
+    wrapper.style.cssText = 'background:var(--card-bg); padding:1rem; border:1px solid var(--border-color); border-radius:8px; flex:1 0 auto; min-width:400px;';
 
     if (title) {
         wrapper.innerHTML = `<h4 style="margin-top:0;">${title}</h4>`;
@@ -302,7 +350,7 @@ function createMultiSCurve(datasets, labels, colors, title) {
 
     const h = 300;
     const w = 800;
-    const pad = 40;
+    const pad = 30; // Slightly smaller padding
 
     // Re-generate common dates
     const commonDates = [];
@@ -333,12 +381,17 @@ function createMultiSCurve(datasets, labels, colors, title) {
     let svgHtml = `<svg viewBox="0 0 ${w} ${h}" style="width:100%; height:auto; min-width:300px; background:var(--bg-color);">`;
 
     // Grid (Vertical - Time)
-    // Draw vertical lines every week or month depending on range
     const timeSpan = totalDays;
     let tickInterval = 1; // days
-    if (timeSpan > 60) tickInterval = 30; // ~Month
-    else if (timeSpan > 14) tickInterval = 7; // Week
-    else tickInterval = 1;
+    if (scurveViewMode === 'week') {
+        tickInterval = 7;
+    } else {
+        if (timeSpan > 180) tickInterval = 30; // ~Month
+        else if (timeSpan > 90) tickInterval = 14;
+        else if (timeSpan > 30) tickInterval = 7;
+        else if (timeSpan > 15) tickInterval = 3;
+        else if (timeSpan > 7) tickInterval = 2;
+    }
 
     let tCurr = new Date(commonMin);
     while (tCurr <= commonMax) {
@@ -350,18 +403,21 @@ function createMultiSCurve(datasets, labels, colors, title) {
 
         // Label
         const dateStr = `${tCurr.getMonth() + 1}/${tCurr.getDate()}`;
-        svgHtml += `<text x="${x}" y="${h - pad + 15}" text-anchor="middle" font-size="10" fill="var(--text-secondary)">${dateStr}</text>`;
+        svgHtml += `<text x="${x}" y="${h - pad + 12}" text-anchor="middle" font-size="9" fill="var(--text-secondary)">${dateStr}</text>`;
 
         tCurr.setDate(tCurr.getDate() + tickInterval);
     }
 
     // Grid (Horizontal - Value)
-    const yTicks = 5;
+    const yTicks = Math.min(10, maxY);
+    let lastVal = -1;
     for (let i = 0; i <= yTicks; i++) {
         const val = Math.round(maxY * (i / yTicks));
+        if (val === lastVal) continue;
+        lastVal = val;
         const y = h - pad - val * scaleY;
         svgHtml += `<line x1="${pad}" y1="${y}" x2="${w - pad}" y2="${y}" stroke="var(--border-color)" stroke-width="0.5" opacity="0.5" />`;
-        svgHtml += `<text x="${pad - 5}" y="${y + 3}" text-anchor="end" font-size="10" fill="var(--text-secondary)">${val}</text>`;
+        svgHtml += `<text x="${pad - 5}" y="${y + 3}" text-anchor="end" font-size="9" fill="var(--text-secondary)">${val}</text>`;
     }
 
     // Today Line
@@ -370,7 +426,7 @@ function createMultiSCurve(datasets, labels, colors, title) {
         const diff = (today - commonMin) / 86400000;
         const x = pad + diff * scaleX;
         svgHtml += `<line x1="${x}" y1="${pad}" x2="${x}" y2="${h - pad}" stroke="var(--accent-color)" stroke-width="1.5" stroke-dasharray="4" opacity="0.8" />`;
-        svgHtml += `<text x="${x}" y="${pad - 5}" text-anchor="middle" font-size="10" fill="var(--accent-color)" font-weight="bold">Today</text>`;
+        svgHtml += `<text x="${x}" y="${pad - 5}" text-anchor="middle" font-size="9" fill="var(--accent-color)" font-weight="bold">Today</text>`;
     }
 
     // Axes lines
@@ -410,9 +466,9 @@ function renderResourceAreaChart(container) {
         return;
     }
 
-    const h = 350;
-    const w = 800; // Fixed coordinate system
-    const pad = 40;
+    const h = 300; // Unified height
+    const w = 800;
+    const pad = 30;
 
     const assignees = [...new Set(data.flatMap(d => Object.keys(d.counts)))].sort();
     const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
@@ -434,21 +490,24 @@ function renderResourceAreaChart(container) {
     let svgHtml = `<svg viewBox="0 0 ${w} ${h}" style="width:100%; height:auto; min-width:300px; background:var(--bg-color);">`;
 
     // Grid (Horizontal)
-    const yTicks = 5;
+    const yTicks = Math.min(10, maxY);
+    let lastVal = -1;
     for (let i = 0; i <= yTicks; i++) {
         const val = Math.round(maxY * (i / yTicks));
+        if (val === lastVal) continue;
+        lastVal = val;
         const y = h - pad - val * scaleY;
         svgHtml += `<line x1="${pad}" y1="${y}" x2="${w - pad}" y2="${y}" stroke="var(--border-color)" stroke-width="0.5" opacity="0.5" />`;
-        svgHtml += `<text x="${pad - 5}" y="${y + 3}" text-anchor="end" font-size="10" fill="var(--text-secondary)">${val}</text>`;
+        svgHtml += `<text x="${pad - 5}" y="${y + 3}" text-anchor="end" font-size="9" fill="var(--text-secondary)">${val}</text>`;
     }
 
     // Grid (Vertical) - Every Nth item
-    const step = Math.ceil(data.length / 10);
+    const step = Math.max(1, Math.ceil(data.length / 20));
     data.forEach((d, i) => {
         const x = pad + i * scaleX;
         if (i % step === 0) {
             svgHtml += `<line x1="${x}" y1="${pad}" x2="${x}" y2="${h - pad}" stroke="var(--border-color)" stroke-width="0.5" opacity="0.3" />`;
-            svgHtml += `<text x="${x}" y="${h - pad + 15}" text-anchor="middle" font-size="10" fill="var(--text-secondary)">${d.label}</text>`;
+            svgHtml += `<text x="${x}" y="${h - pad + 12}" text-anchor="middle" font-size="9" fill="var(--text-secondary)">${d.label}</text>`;
         }
     });
 
@@ -467,7 +526,7 @@ function renderResourceAreaChart(container) {
     if (todayIdx >= 0) {
         const x = pad + todayIdx * scaleX;
         svgHtml += `<line x1="${x}" y1="${pad}" x2="${x}" y2="${h - pad}" stroke="var(--accent-color)" stroke-width="1.5" stroke-dasharray="4" opacity="0.8" />`;
-        svgHtml += `<text x="${x}" y="${pad - 5}" text-anchor="middle" font-size="10" fill="var(--accent-color)" font-weight="bold">Today</text>`;
+        svgHtml += `<text x="${x}" y="${pad - 5}" text-anchor="middle" font-size="9" fill="var(--accent-color)" font-weight="bold">Today</text>`;
     }
 
     // Axes lines
@@ -510,8 +569,8 @@ function renderResourceAreaChart(container) {
     const ly = 10;
     assignees.forEach(a => {
         svgHtml += `<rect x="${lx}" y="${ly}" width="10" height="10" fill="${colorMap[a]}" />`;
-        svgHtml += `<text x="${lx + 15}" y="${ly + 9}" font-size="12" fill="var(--text-primary)">${a}</text>`;
-        lx += a.length * 8 + 40;
+        svgHtml += `<text x="${lx + 15}" y="${ly + 9}" font-size="11" fill="var(--text-primary)">${a}</text>`;
+        lx += a.length * 7 + 35;
     });
 
     svgHtml += `</svg>`;
@@ -524,24 +583,60 @@ function renderResourceTable(container) {
 
     const assignees = [...new Set(data.flatMap(d => Object.keys(d.counts)))].sort();
 
-    let html = `<table style="width:100%; border-collapse:collapse; font-size:0.9rem;">`;
-    html += `<thead><tr style="background:var(--bg-color); border-bottom:1px solid var(--border-color);">`;
-    html += `<th style="padding:0.5rem; text-align:left;">Period</th>`;
-    assignees.forEach(a => html += `<th style="padding:0.5rem; text-align:center;">${a}</th>`);
-    html += `<th style="padding:0.5rem; text-align:center;">Total</th>`;
-    html += `</tr></thead><tbody>`;
+    let html = `<table style="width:max-content; min-width:100%; border-collapse:collapse; font-size:0.9rem;">`;
 
-    data.forEach(d => {
-        const sum = Object.values(d.counts).reduce((a, b) => a + b, 0);
-        html += `<tr style="border-bottom:1px solid var(--border-color);">`;
-        html += `<td style="padding:0.5rem;">${d.label}</td>`;
-        assignees.forEach(a => {
-            const val = d.counts[a] || 0;
-            html += `<td style="padding:0.5rem; text-align:center; color:${val > 0 ? 'var(--text-primary)' : 'var(--text-secondary)'}">${val || '-'}</td>`;
+    if (!resourceTableTranspose) {
+        // Original: Rows = Period, Cols = Assignees
+        html += `<thead><tr style="background:var(--bg-color); border-bottom:1px solid var(--border-color);">`;
+        html += `<th style="padding:0.5rem; text-align:left; min-width:120px;">Period</th>`;
+        assignees.forEach(a => html += `<th style="padding:0.5rem; text-align:center; min-width:80px; white-space:nowrap;">${a}</th>`);
+        html += `<th style="padding:0.5rem; text-align:center; min-width:80px;">Total</th>`;
+        html += `</tr></thead><tbody>`;
+
+        data.forEach(d => {
+            const sum = Object.values(d.counts).reduce((a, b) => a + b, 0);
+            html += `<tr style="border-bottom:1px solid var(--border-color);">`;
+            html += `<td style="padding:0.5rem; white-space:nowrap;">${d.label}</td>`;
+            assignees.forEach(a => {
+                const val = d.counts[a] || 0;
+                html += `<td style="padding:0.5rem; text-align:center; color:${val > 0 ? 'var(--text-primary)' : 'var(--text-secondary)'}">${val || '-'}</td>`;
+            });
+            html += `<td style="padding:0.5rem; text-align:center; font-weight:bold;">${sum}</td>`;
+            html += `</tr>`;
         });
-        html += `<td style="padding:0.5rem; text-align:center; font-weight:bold;">${sum}</td>`;
+    } else {
+        // Transposed: Rows = Assignees, Cols = Period
+        html += `<thead><tr style="background:var(--bg-color); border-bottom:1px solid var(--border-color);">`;
+        html += `<th style="padding:0.5rem; text-align:left; min-width:120px;">Assignee</th>`;
+        data.forEach(d => html += `<th style="padding:0.5rem; text-align:center; min-width:80px; white-space:nowrap;">${d.label}</th>`);
+        html += `<th style="padding:0.5rem; text-align:center; min-width:80px;">Total</th>`;
+        html += `</tr></thead><tbody>`;
+
+        assignees.forEach(a => {
+            let rowTotal = 0;
+            html += `<tr style="border-bottom:1px solid var(--border-color);">`;
+            html += `<td style="padding:0.5rem; font-weight:bold; white-space:nowrap;">${a}</td>`;
+            data.forEach(d => {
+                const val = d.counts[a] || 0;
+                rowTotal += val;
+                html += `<td style="padding:0.5rem; text-align:center; color:${val > 0 ? 'var(--text-primary)' : 'var(--text-secondary)'}">${val || '-'}</td>`;
+            });
+            html += `<td style="padding:0.5rem; text-align:center; font-weight:bold;">${rowTotal}</td>`;
+            html += `</tr>`;
+        });
+
+        // Add a final "Total" row at the bottom
+        html += `<tr style="border-bottom:1px solid var(--border-color); background:var(--bg-color);">`;
+        html += `<td style="padding:0.5rem; font-weight:bold;">Total</td>`;
+        let grandTotal = 0;
+        data.forEach(d => {
+            const sum = Object.values(d.counts).reduce((a, b) => a + b, 0);
+            grandTotal += sum;
+            html += `<td style="padding:0.5rem; text-align:center; font-weight:bold;">${sum}</td>`;
+        });
+        html += `<td style="padding:0.5rem; text-align:center; font-weight:bold;">${grandTotal}</td>`;
         html += `</tr>`;
-    });
+    }
 
     html += `</tbody></table>`;
     container.innerHTML += html;
@@ -624,4 +719,255 @@ function calculateResourceLoading() {
         curr = next;
     }
     return buckets;
+}
+
+function renderBurndownChart(container) {
+    const section = document.createElement('div');
+    section.className = 'chart-card';
+    section.style.cssText = 'background:var(--card-bg); padding:1rem; border:1px solid var(--border-color); border-radius:8px; width:70%; min-width:600px; margin: 0 auto; flex-shrink:0;';
+
+    const header = document.createElement('div');
+    header.innerHTML = `<h3 style="margin:0 0 1rem 0;">Burndown Chart (Remaining Tasks)</h3>`;
+    section.appendChild(header);
+
+    const data = calculateSCurveData(project.phases.flatMap(p => p.tasks));
+    if (!data || data.total === 0) {
+        section.innerHTML += '<p>No data</p>';
+        container.appendChild(section);
+        return;
+    }
+
+    const h = 300;
+    const w = 800;
+    const pad = 30;
+    const totalDays = (data.dates[data.dates.length - 1] - data.dates[0]) / 86400000;
+    const scaleX = (w - pad * 2) / (totalDays || 1);
+    const maxY = data.total;
+    const scaleY = (h - pad * 2) / (maxY || 1);
+
+    let svgHtml = `<svg viewBox="0 0 ${w} ${h}" style="width:100%; height:auto; min-width:300px; background:var(--bg-color);">`;
+
+    // Grid X
+    const timeSpan = totalDays;
+    let tickInterval = 7;
+    if (timeSpan > 90) tickInterval = 14;
+    else if (timeSpan > 30) tickInterval = 7;
+    else if (timeSpan <= 14) tickInterval = 2;
+
+    let tCurr = new Date(data.dates[0]);
+    while (tCurr <= data.dates[data.dates.length - 1]) {
+        const diff = (tCurr - data.dates[0]) / 86400000;
+        const x = pad + diff * scaleX;
+        svgHtml += `<line x1="${x}" y1="${pad}" x2="${x}" y2="${h - pad}" stroke="var(--border-color)" stroke-width="0.5" opacity="0.3" />`;
+        const dateStr = `${tCurr.getMonth() + 1}/${tCurr.getDate()}`;
+        svgHtml += `<text x="${x}" y="${h - pad + 12}" text-anchor="middle" font-size="9" fill="var(--text-secondary)">${dateStr}</text>`;
+        tCurr.setDate(tCurr.getDate() + tickInterval);
+    }
+
+    // Grid Y
+    const yTicks = Math.min(10, maxY);
+    for (let i = 0; i <= yTicks; i++) {
+        const val = Math.round(maxY * (i / yTicks));
+        const y = h - pad - val * scaleY;
+        svgHtml += `<line x1="${pad}" y1="${y}" x2="${w - pad}" y2="${y}" stroke="var(--border-color)" stroke-width="0.5" opacity="0.5" />`;
+        svgHtml += `<text x="${pad - 5}" y="${y + 3}" text-anchor="end" font-size="9" fill="var(--text-secondary)">${val}</text>`;
+    }
+
+    // Ideal Line
+    const startX = pad; const startY = pad;
+    const endX = w - pad; const endY = h - pad;
+    svgHtml += `<line x1="${startX}" y1="${startY}" x2="${endX}" y2="${endY}" stroke="#94a3b8" stroke-width="2" stroke-dasharray="4" opacity="0.6" />`;
+
+    // Actual Line (Remaining tasks based on 'actual' completion)
+    const getValY = (val) => h - pad - val * scaleY;
+    const getValX = (date) => pad + ((date - data.dates[0]) / 86400000) * scaleX;
+
+    const remainingCurve = data.actual.map(completed => data.total - completed);
+    // Draw only up to today or last completed date ideally
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const pts = [];
+    for (let i = 0; i < remainingCurve.length; i++) {
+        const d = data.dates[i];
+        if (d > today) break;
+        pts.push(`${getValX(d)},${getValY(remainingCurve[i])}`);
+    }
+
+    if (pts.length > 0) {
+        svgHtml += `<polyline points="${pts.join(' ')}" fill="none" stroke="#ef4444" stroke-width="2" />`;
+    }
+
+    // Legend
+    svgHtml += `<rect x="${pad}" y="10" width="10" height="10" fill="#94a3b8" />`;
+    svgHtml += `<text x="${pad + 15}" y="19" font-size="11" fill="var(--text-primary)">Ideal Remaining</text>`;
+    svgHtml += `<rect x="${pad + 120}" y="10" width="10" height="10" fill="#ef4444" />`;
+    svgHtml += `<text x="${pad + 135}" y="19" font-size="11" fill="var(--text-primary)">Actual Remaining</text>`;
+
+    svgHtml += `</svg>`;
+    section.innerHTML += svgHtml;
+    container.appendChild(section);
+}
+
+function renderVarianceChart(container) {
+    const section = document.createElement('div');
+    section.className = 'chart-card';
+    section.style.cssText = 'background:var(--card-bg); padding:1rem; border:1px solid var(--border-color); border-radius:8px; width:70%; min-width:600px; margin: 0 auto; flex-shrink:0;';
+
+    const header = document.createElement('div');
+    header.innerHTML = `<h3 style="margin:0 0 1rem 0;">Variance Analysis (Est vs Actual Hrs)</h3>`;
+    section.appendChild(header);
+
+    const varianceData = project.phases.map(p => {
+        let est = 0; let act = 0;
+        const traverse = (tasks) => {
+            tasks.forEach(t => {
+                est += parseFloat(t.estimate || 0);
+                act += parseFloat(t.actualHours || 0);
+                if (t.subtasks) traverse(t.subtasks);
+            });
+        };
+        traverse(p.tasks);
+        return { name: p.name, est, act };
+    });
+
+    if (varianceData.length === 0) {
+        section.innerHTML += '<p>No data</p>';
+        container.appendChild(section);
+        return;
+    }
+
+    const h = 300;
+    const w = 800;
+    const pad = 30;
+    const bottomPad = 60; // Extra room for labels
+    const maxVal = Math.max(1, ...varianceData.flatMap(d => [d.est, d.act]));
+    let maxY = Math.ceil(maxVal / 5) * 5;
+
+    const scaleY = (h - pad - bottomPad) / maxY;
+    const barWidth = 20;
+    const groupWidth = 60;
+    const totalW = varianceData.length * groupWidth + pad * 2;
+    const finalW = Math.max(w, totalW);
+
+    let svgHtml = `<svg viewBox="0 0 ${finalW} ${h}" style="width:100%; height:auto; min-width:300px; background:var(--bg-color);">`;
+
+    // Grid Y
+    const yTicks = Math.min(10, maxY);
+    for (let i = 0; i <= yTicks; i++) {
+        const val = Math.round(maxY * (i / yTicks));
+        const y = h - bottomPad - val * scaleY;
+        svgHtml += `<line x1="${pad}" y1="${y}" x2="${finalW - pad}" y2="${y}" stroke="var(--border-color)" stroke-width="0.5" opacity="0.5" />`;
+        svgHtml += `<text x="${pad - 5}" y="${y + 3}" text-anchor="end" font-size="9" fill="var(--text-secondary)">${val}</text>`;
+    }
+    svgHtml += `<line x1="${pad}" y1="${h - bottomPad}" x2="${finalW - pad}" y2="${h - bottomPad}" stroke="var(--text-secondary)" stroke-width="1" />`;
+
+    // Bars
+    varianceData.forEach((d, i) => {
+        const cx = pad + 15 + i * groupWidth;
+
+        // Est
+        const eH = d.est * scaleY;
+        const eY = h - bottomPad - eH;
+        svgHtml += `<rect x="${cx}" y="${eY}" width="${barWidth}" height="${eH}" fill="#94a3b8" />`;
+
+        // Act
+        const aH = d.act * scaleY;
+        const aY = h - bottomPad - aH;
+        svgHtml += `<rect x="${cx + barWidth + 2}" y="${aY}" width="${barWidth}" height="${aH}" fill="${d.act > d.est ? '#ef4444' : '#3b82f6'}" />`;
+
+        // Label
+        const shortName = d.name.length > 10 ? d.name.substring(0, 10) + '...' : d.name;
+        svgHtml += `<text x="${cx + barWidth}" y="${h - bottomPad + 15}" text-anchor="middle" font-size="9" fill="var(--text-primary)" transform="rotate(-30, ${cx + barWidth}, ${h - bottomPad + 15})">${shortName}</text>`;
+    });
+
+    // Legend
+    svgHtml += `<rect x="${pad}" y="10" width="10" height="10" fill="#94a3b8" />`;
+    svgHtml += `<text x="${pad + 15}" y="19" font-size="11" fill="var(--text-primary)">Estimate</text>`;
+    svgHtml += `<rect x="${pad + 80}" y="10" width="10" height="10" fill="#3b82f6" />`;
+    svgHtml += `<text x="${pad + 95}" y="19" font-size="11" fill="var(--text-primary)">Actual (Under)</text>`;
+    svgHtml += `<rect x="${pad + 200}" y="10" width="10" height="10" fill="#ef4444" />`;
+    svgHtml += `<text x="${pad + 215}" y="19" font-size="11" fill="var(--text-primary)">Actual (Over)</text>`;
+
+    svgHtml += `</svg>`;
+    section.innerHTML += svgHtml;
+    container.appendChild(section);
+}
+
+function renderStatusDistribution(container) {
+    const section = document.createElement('div');
+    section.className = 'chart-card';
+    section.style.cssText = 'background:var(--card-bg); padding:1rem; border:1px solid var(--border-color); border-radius:8px; width:70%; min-width:600px; margin: 0 auto; flex-shrink:0;';
+
+    const header = document.createElement('div');
+    header.innerHTML = `<h3 style="margin:0 0 1rem 0;">Status Distribution</h3>`;
+    section.appendChild(header);
+
+    let todo = 0, doing = 0, done = 0, danger = 0;
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+
+    const traverse = (tasks) => {
+        tasks.forEach(t => {
+            if (t.status === 'done') done++;
+            else {
+                if (t.end && new Date(t.end) < today) danger++;
+                else if (t.status === 'doing') doing++;
+                else todo++;
+            }
+            if (t.subtasks) traverse(t.subtasks);
+        });
+    };
+    project.phases.forEach(p => traverse(p.tasks));
+
+    const total = todo + doing + done + danger;
+    if (total === 0) {
+        section.innerHTML += '<p>No data</p>';
+        container.appendChild(section);
+        return;
+    }
+
+    const data = [
+        { label: 'Done', value: done, color: '#10b981' },
+        { label: 'Doing', value: doing, color: '#3b82f6' },
+        { label: 'Danger', value: danger, color: '#ef4444' },
+        { label: 'ToDo', value: todo, color: '#94a3b8' }
+    ].filter(d => d.value > 0);
+
+    // CSS Donut Chart
+    let donutHtml = `<div style="display:flex; justify-content:center; align-items:center; gap:3rem; padding: 2rem 0;">`;
+
+    let conicGradients = [];
+    let cumulativePercent = 0;
+    data.forEach(d => {
+        const percent = (d.value / total) * 100;
+        conicGradients.push(`${d.color} ${cumulativePercent}% ${cumulativePercent + percent}%`);
+        cumulativePercent += percent;
+    });
+
+    const conicStr = `conic-gradient(${conicGradients.join(', ')})`;
+
+    donutHtml += `
+        <div style="width: 200px; height: 200px; border-radius: 50%; background: ${conicStr}; display:flex; justify-content:center; align-items:center; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);">
+            <div style="width: 140px; height: 140px; border-radius: 50%; background: var(--card-bg); display:flex; flex-direction:column; justify-content:center; align-items:center;">
+                <span style="font-size:2rem; font-weight:bold; color:var(--text-primary);">${total}</span>
+                <span style="font-size:0.8rem; color:var(--text-secondary);">Total Tasks</span>
+            </div>
+        </div>
+    `;
+
+    // Legend
+    let legendHtml = `<div style="display:flex; flex-direction:column; gap:0.5rem;">`;
+    data.forEach(d => {
+        legendHtml += `
+            <div style="display:flex; align-items:center; justify-content:space-between; width: 150px; padding: 6px 12px; border-radius: 4px; background: var(--bg-color); border-left: 4px solid ${d.color};">
+                <span style="font-size:0.9rem; color:var(--text-primary);">${d.label}</span>
+                <span style="font-weight:bold; color:var(--text-primary);">${d.value}</span>
+            </div>
+        `;
+    });
+    legendHtml += `</div>`;
+
+    donutHtml += legendHtml;
+    donutHtml += `</div>`;
+
+    section.innerHTML += donutHtml;
+    container.appendChild(section);
 }

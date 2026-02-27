@@ -21,9 +21,9 @@
   --wbs-row-height: 24px;
   --wbs-grid-color: #e2e8f0;
   --dependency-line-color: #cbd5e1;
-  --active-phase-row-bg: #e2e8f0;
+  --active-phase-row-bg: #cbd5e1;
   --active-phase-row-color: #334155;
-  /* Distinct Gray/Slate for phases */
+  /* Distinct Gray/Slate for phases (Slightly Darker) */
 }
 
 [data-theme="dark"] {
@@ -1403,14 +1403,6 @@ body {
 /* Row Coloring Priority (Phase 34) - Modern Indicator Style */
 
 /* Light Mode Styles */
-.task-done td {
-  background-color: #f8fafc !important;
-  /* Very Light Slate */
-  color: #94a3b8 !important;
-  /* Muted Slate */
-  text-decoration: line-through;
-}
-
 .task-danger td {
   background-color: #fef2f2 !important;
   /* Extremely Light Red */
@@ -1432,30 +1424,17 @@ body {
   /* Bold Yellow Indicator */
 }
 
-.task-doing td {
-  background-color: #f0f9ff !important;
-  /* Extremely Light Blue */
-}
-
-.task-doing td:first-child {
-  box-shadow: inset 4px 0 0 0 #3b82f6 !important;
-  /* Blue Indicator */
-}
-
-/* Ensure inputs can still be read inside done tasks without strikethrough */
+/* Ensure inputs can still be read inside transparent rows */
 .task-done td input,
 .task-done td select {
   text-decoration: none;
 }
 
+/* Allow specific status select colors to override row defaults */
 .task-done td input,
-.task-done td select,
 .task-danger td input,
-.task-danger td select,
 .task-warning td input,
-.task-warning td select,
-.task-doing td input,
-.task-doing td select {
+.task-doing td input {
   background-color: transparent !important;
   color: inherit !important;
 }
@@ -1466,17 +1445,10 @@ body {
   color: var(--active-phase-row-color) !important;
 }
 
-/* Row Coloring Priority - Dark Mode Variants */
-[data-theme="dark"] .task-done td {
-  background-color: #0f172a !important;
-  /* Very Dark BG, blends deeply */
-  color: #475569 !important;
-  /* Deep Faded Slate */
-}
+/* Dark Mode Adaptations */
 
 [data-theme="dark"] .task-danger td {
   background-color: rgba(239, 68, 68, 0.1) !important;
-  /* Subtle Red Wash */
 }
 
 [data-theme="dark"] .task-danger td:first-child {
@@ -1486,7 +1458,6 @@ body {
 
 [data-theme="dark"] .task-warning td {
   background-color: rgba(234, 179, 8, 0.1) !important;
-  /* Subtle Yellow Wash */
 }
 
 [data-theme="dark"] .task-warning td:first-child {
@@ -1494,12 +1465,48 @@ body {
   /* Bright Yellow Indicator */
 }
 
-[data-theme="dark"] .task-doing td {
-  background-color: rgba(59, 130, 246, 0.1) !important;
-  /* Subtle Blue Wash */
+/* Status Specific Select Styling (Phase 35) */
+/* Reset appearance to allow custom background colors in all browsers */
+.wbs-table select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  padding: 2px 8px;
+  background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23666%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.7em top 50%;
+  background-size: 0.65em auto;
+  padding-right: 1.5rem !important;
 }
 
-[data-theme="dark"] .task-doing td:first-child {
-  box-shadow: inset 4px 0 0 0 #60a5fa !important;
-  /* Bright Blue Indicator */
+/* 1. Done: Gray/Muted */
+.wbs-table select.status-done {
+  background-color: #cbd5e1 !important;
+  color: #475569 !important;
+  border-color: #94a3b8 !important;
+}
+
+[data-theme="dark"] .wbs-table select.status-done {
+  background-color: #334155 !important;
+  color: #94a3b8 !important;
+  border-color: #475569 !important;
+}
+
+/* 2. Doing: Blue */
+.wbs-table select.status-doing {
+  background-color: #3b82f6 !important;
+  color: white !important;
+  border-color: #2563eb !important;
+}
+
+[data-theme="dark"] .wbs-table select.status-doing {
+  background-color: #2563eb !important;
+  color: white !important;
+  border-color: #1d4ed8 !important;
+}
+
+/* 3. Todo: Default */
+.wbs-table select.status-todo {
+  background-color: var(--card-bg) !important;
+  color: var(--text-primary) !important;
 }
